@@ -199,7 +199,7 @@ def main():
     st.title("Doctor Pay Model with Dynamic FPR Calculation")
 
     # Add RPI/CPI toggle
-    inflation_type = st.radio("Select inflation measure:", ("RPI", "CPI"))
+    inflation_type = st.radio("Select inflation measure:", ("RPI", "CPI"), horizontal = True)
 
     # Add FPR start year selection
     fpr_start_year = st.selectbox(
