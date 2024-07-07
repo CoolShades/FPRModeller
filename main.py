@@ -378,14 +378,24 @@ def main():
     # Display results
     df_results = pd.DataFrame(results)
     st.dataframe(df_results)
+    
+    # Display total costs side by side
+    col1, col2 = st.columns(2)
 
-    # Display total costs
-    st.write(f"Total nominal cost of the deal: £{total_nominal_cost:,.2f}")
-    st.write(f"Total real cost of the deal (above inflation): £{total_real_cost:,.2f}")
-
-    # Calculate and display average percent of FPR achieved
-    avg_fpr = -df_results["Real Terms Pay Cuts"].apply(lambda x: x[-1]).mean()
-    st.write(f"Average progress towards full pay restoration: {avg_fpr:.2f}%")
+    with col1:
+        st.metric(
+            label="Total real cost of the deal (above inflation)",
+            value=f"£{total_real_cost:,.0f}",
+            delta = None
+        )
+    
+    with col2:
+        st.metric(
+            label="Total nominal cost of the deal ( BASIC PAY ONLY )",
+            value=f"£{total_nominal_cost:,.0f}",
+            delta = None
+        )
+    st.divider()
 
     # Pay Progression, FPR Progress, and Pay Erosion Visualization
     st.subheader("Pay Progression, FPR Progress, and Pay Erosion Visualization")
