@@ -190,8 +190,8 @@ def create_fpr_progress_table(selected_data):
     })
 
     # Format percentages
-    df["FPR Progress (%)"] = df["FPR Progress (%)"].apply(lambda x: f"{x:.4f}")
-    df["Pay Erosion (%)"] = df["Pay Erosion (%)"].apply(lambda x: f"{x:.4f}")
+    df["FPR Progress (%)"] = df["FPR Progress (%)"].apply(lambda x: f"{x:.2f}")
+    df["Pay Erosion (%)"] = df["Pay Erosion (%)"].apply(lambda x: f"{x:.2f}")
 
     return df
 
