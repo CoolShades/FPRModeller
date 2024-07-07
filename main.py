@@ -6,7 +6,7 @@ from plotly.subplots import make_subplots
 # Constants
 FPR_REFERENCE_YEAR = 2008
 CURRENT_YEAR = 2024
-HISTORICAL_INFLATION = 2.0  # You may want to adjust this value
+HISTORICAL_INFLATION = 2.0  # You may want  ato adjust this value
 
 def calculate_pay_increase(base_pay, percentages, inflation_rate):
     pay = base_pay
@@ -57,6 +57,143 @@ def calculate_fpr_percentage(start_year, inflation_type):
     
     fpr_percentage = (1 - cumulative_effect) * 100
     return fpr_percentage
+
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+
+# Constants
+FPR_REFERENCE_YEAR = 2008
+CURRENT_YEAR = 2024
+HISTORICAL_INFLATION = 2.0  # You may want  ato adjust this value
+
+def calculate_pay_increase(base_pay, percentages, inflation_rate):
+    pay = base_pay
+    increases = [base_pay]
+    for percentage in percentages:
+        total_increase_rate = (1 + percentage/100) * (1 + inflation_rate/100) - 1
+        pay *= (1 + total_increase_rate)
+        increases.append(pay)
+    return increases
+
+def calculate_weighted_average(percentages, weights):
+    return sum(p * w for p, w in zip(percentages, weights)) / sum(weights)
+
+def calculate_real_terms_pay_cut(nominal_increase, inflation_rate):
+    return ((1 + nominal_increase) / (1 + inflation_rate)) - 1
+
+def calculate_fpr_percentage(start_year, inflation_type):
+    # Data from the provided tables
+    pay_data = [
+        {"year": "2008/2009", "pay_award": 0.0, "rpi": 0.0, "cpi": 0.0},  # Baseline year
+        {"year": "2009/2010", "pay_award": 0.015, "rpi": 0.053, "cpi": 0.037},
+        {"year": "2010/2011", "pay_award": 0.010, "rpi": 0.052, "cpi": 0.045},
+        {"year": "2011/2012", "pay_award": 0.000, "rpi": 0.035, "cpi": 0.030},
+        {"year": "2012/2013", "pay_award": 0.000, "rpi": 0.029, "cpi": 0.024},
+        {"year": "2013/2014", "pay_award": 0.010, "rpi": 0.025, "cpi": 0.018},
+        {"year": "2014/2015", "pay_award": 0.000, "rpi": 0.009, "cpi": 0.000},
+        {"year": "2015/2016", "pay_award": 0.000, "rpi": 0.013, "cpi": 0.003},
+        {"year": "2016/2017", "pay_award": 0.010, "rpi": 0.035, "cpi": 0.027},
+        {"year": "2017/2018", "pay_award": 0.010, "rpi": 0.034, "cpi": 0.024},
+        {"year": "2018/2019", "pay_award": 0.020, "rpi": 0.030, "cpi": 0.021},
+        {"year": "2019/2020", "pay_award": 0.023, "rpi": 0.015, "cpi": 0.008},
+        {"year": "2020/2021", "pay_award": 0.030, "rpi": 0.029, "cpi": 0.015},
+        {"year": "2021/2022", "pay_award": 0.030, "rpi": 0.111, "cpi": 0.090},
+        {"year": "2022/2023", "pay_award": 0.030, "rpi": 0.114, "cpi": 0.087},  # CPI data not provided for this year
+    ]
+    
+    start_index = next((i for i, data in enumerate(pay_data) if data["year"] == start_year), 0)
+    cumulative_effect = 1.0
+    
+    inflation_key = "rpi" if inflation_type == "RPI" else "cpi"
+    
+    for data in pay_data[start_index:]:
+        inflation_rate = data[inflation_key]
+        if inflation_rate == 0.0:  # Skip years with no inflation data
+            continue
+        real_terms_change = ((1 + data["pay_award"]) / (1 + inflation_rate)) - 1
+        cumulative_effect *= (1 + real_terms_change)
+    
+    fpr_percentage = (1 - cumulative_effect) * 100
+    return fpr_percentage
+
+def create_pay_progression_chart(selected_data):
+    # Prepare data
+    years = [f"Year {i}" for i in range(len(selected_data["Pay Progression Nominal"]))]
+    nominal_pay = selected_data["Pay Progression Nominal"]
+    baseline_pay = nominal_pay[0]
+    pay_increase = [max(0, pay - baseline_pay) for pay in nominal_pay]
+    percent_increase = [(increase / baseline_pay) * 100 for increase in pay_increase]
+    initial_pay_erosion = abs(selected_data["Real Terms Pay Cuts"][0])
+    pay_erosion = [abs(x) for x in selected_data["Real Terms Pay Cuts"]]
+    fpr_progress = [(initial_pay_erosion - abs(x)) / initial_pay_erosion * 100 for x in selected_data["Real Terms Pay Cuts"]]
+
+    # Create figure with secondary y-axis
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # Add bar chart for baseline Nominal Pay
+    fig.add_trace(
+        go.Bar(x=years, y=[baseline_pay] * len(years), name="Baseline Pay", marker_color='rgb(0, 123, 255)'),
+        secondary_y=False,
+    )
+
+    # Add bar chart for Pay Increase
+    fig.add_trace(
+        go.Bar(x=years, y=pay_increase, name="Pay Increase", marker_color='rgb(255, 165, 0)',
+               hovertemplate='Year: %{x}<br>Total Pay: £%{customdata[0]:,.2f}<br>Increase: £%{y:,.2f} (%{customdata[1]:.2f}%)<extra></extra>',
+               customdata=list(zip(nominal_pay, percent_increase))),
+        secondary_y=False,
+    )
+
+    # Add line chart for FPR Progress
+    fig.add_trace(
+        go.Scatter(x=years, y=fpr_progress, name="FPR Progress", line=dict(color='rgb(0, 200, 0)', width=2)),
+        secondary_y=True,
+    )
+
+    # Add line chart for Pay Erosion
+    fig.add_trace(
+        go.Scatter(x=years, y=pay_erosion, name="Pay Erosion", line=dict(color='rgb(255, 0, 0)', width=2)),
+        secondary_y=True,
+    )
+
+    # Update layout
+    fig.update_layout(
+        title=f"Pay Progression, FPR Progress, and Pay Erosion for {selected_data['Nodal Point']}",
+        xaxis_title="Year",
+        yaxis_title="Pay (£)",
+        yaxis2_title="Percentage (%)",
+        legend=dict(x=0, y=1.1, orientation="h"),
+        barmode='stack',
+        height=600,
+    )
+
+    # Update y-axes
+    fig.update_yaxes(title_text="Pay (£)", secondary_y=False, range=[0, 100000])  # Set fixed range for Nominal Pay
+    fig.update_yaxes(title_text="Percentage (%)", secondary_y=True)
+
+    return fig
+
+def create_fpr_progress_table(selected_data):
+    # Prepare data
+    years = [f"Year {i}" for i in range(len(selected_data["Pay Progression Nominal"]))]
+    initial_pay_erosion = abs(selected_data["Real Terms Pay Cuts"][0])
+    pay_erosion = [abs(x) for x in selected_data["Real Terms Pay Cuts"]]
+    fpr_progress = [(initial_pay_erosion - abs(x)) / initial_pay_erosion * 100 for x in selected_data["Real Terms Pay Cuts"]]
+
+    # Create DataFrame
+    df = pd.DataFrame({
+        "Year": years,
+        "FPR Progress (%)": fpr_progress,
+        "Pay Erosion (%)": pay_erosion
+    })
+
+    # Format percentages
+    df["FPR Progress (%)"] = df["FPR Progress (%)"].apply(lambda x: f"{x:.4f}")
+    df["Pay Erosion (%)"] = df["Pay Erosion (%)"].apply(lambda x: f"{x:.4f}")
+
+    return df
 
 def main():
     st.title("Doctor Pay Model with Dynamic FPR Calculation")
@@ -144,7 +281,7 @@ def main():
             # Main slider for the year
             percentage = st.slider(
                 f"Real Percentage increase for Year {year + 1} (above inflation)", 
-                min_value=0.0, max_value=20.0, value=st.session_state[f"percentage_{year}"], step=0.1, 
+                min_value=0.0, max_value=20.0, value=st.session_state[f"percentage_{year}"], step=0.01, 
                 key=f"percentage_{year}",
                 on_change=update_nodal_percentages,
                 args=(year,)
@@ -158,7 +295,7 @@ def main():
                         f"{name} increase (%)",
                         min_value=0.0, max_value=20.0,
                         value=st.session_state[f"nodal_percentages_{year}"][i],
-                        step=0.1,
+                        step=0.01,
                         key=f"nodal_{i}_{year}",
                         on_change=update_single_nodal,
                         args=(year, i)
@@ -172,31 +309,33 @@ def main():
     cumulative_costs = [0] * (num_years + 1)  # Initialize with zeros
 
     for i, (name, base_pay) in enumerate(nodal_points):
-        pay_progression_nominal = calculate_pay_increase(base_pay, [p[i] for p in nodal_percentages], inflation_rate)
+        pay_progression_nominal = [base_pay]
         pay_progression_real = [base_pay]
-        real_terms_pay_cuts = [0]  # Initial pay cut is 0
-        fpr_progress = [0]  # Initialize FPR progress tracking
-        pay_erosion = [fpr_percentage / 100]  # Initialize pay erosion with FPR percentage
-        
-        fpr_target = base_pay * (1 + fpr_percentage / 100)
+        real_terms_pay_cuts = [-fpr_percentage]  # Initialize with negative FPR percentage
+        net_change_in_pay = [0]
         
         for year in range(1, num_years + 1):
-            nominal_increase = (pay_progression_nominal[year] - pay_progression_nominal[year-1]) / pay_progression_nominal[year-1]
-            real_terms_pay_cut = calculate_real_terms_pay_cut(nominal_increase, inflation_rate / 100)
-            real_terms_pay_cuts.append(real_terms_pay_cut)
+            # Apply inflation
+            inflated_pay = pay_progression_nominal[-1] * (1 + inflation_rate / 100)
             
-            current_real_pay = pay_progression_real[-1] * (1 + real_terms_pay_cut)
-            pay_progression_real.append(current_real_pay)
+            # Apply pay rise
+            new_nominal_pay = inflated_pay * (1 + nodal_percentages[year-1][i] / 100)
             
-            # Calculate new pay erosion
-            new_erosion_after_inflation = 1 - (1 - pay_erosion[-1]) / (1 + inflation_rate / 100)
-            new_erosion = 1 - ((1 - new_erosion_after_inflation) * (1 + real_terms_pay_cut))
-            pay_erosion.append(new_erosion)
+            # Calculate net change in pay
+            net_change = (new_nominal_pay - pay_progression_nominal[-1]) / pay_progression_nominal[-1] * 100
             
-            # Calculate FPR progress for this year
-            current_fpr_progress = ((1 - new_erosion) - (1 - pay_erosion[0])) / pay_erosion[0] * 100
-            fpr_progress.append(current_fpr_progress)
-        
+            # Calculate real terms change
+            real_terms_change = ((1 + nodal_percentages[year-1][i] / 100) / (1 + inflation_rate / 100)) - 1
+            
+            # Update cumulative real terms pay cut
+            previous_cut = real_terms_pay_cuts[-1] / 100
+            new_cut = (1 + previous_cut) * (1 + real_terms_change) - 1
+            
+            pay_progression_nominal.append(new_nominal_pay)
+            pay_progression_real.append(pay_progression_real[-1] * (1 + real_terms_change))
+            real_terms_pay_cuts.append(new_cut * 100)
+            net_change_in_pay.append(net_change)
+
         final_pay = pay_progression_nominal[-1]
         total_nominal_increase = final_pay - base_pay
         total_real_increase = pay_progression_real[-1] - base_pay
@@ -221,20 +360,19 @@ def main():
             "Nodal Point": name,
             "Base Pay": base_pay,
             "Final Pay": final_pay,
-            "FPR Target": fpr_target,
+            "FPR Target": base_pay * (1 + fpr_percentage / 100),
             "FPR Required (%)": fpr_percentage,
             "Nominal Total Increase": total_nominal_increase,
             "Real Total Increase": total_real_increase,
             "Nominal Percent Increase": percent_increase,
             "Real Percent Increase": real_percent_increase,
-            "FPR Progress by Year": fpr_progress,
-            "Pay Erosion by Year": pay_erosion,
+            "Real Terms Pay Cuts": real_terms_pay_cuts,
+            "Net Change in Pay": net_change_in_pay,
             "Doctor Count": doctor_count,
             "Nominal Nodal Cost": nominal_nodal_cost,
             "Real Nodal Cost": real_nodal_cost,
             "Pay Progression Nominal": pay_progression_nominal,
-            "Pay Progression Real": pay_progression_real,
-            "Real Terms Pay Cuts": real_terms_pay_cuts
+            "Pay Progression Real": pay_progression_real
         })
 
     # Display results
@@ -246,71 +384,24 @@ def main():
     st.write(f"Total real cost of the deal (above inflation): £{total_real_cost:,.2f}")
 
     # Calculate and display average percent of FPR achieved
-    avg_fpr = df_results["FPR Progress by Year"].apply(lambda x: x[-1]).mean()
+    avg_fpr = -df_results["Real Terms Pay Cuts"].apply(lambda x: x[-1]).mean()
     st.write(f"Average progress towards full pay restoration: {avg_fpr:.2f}%")
 
-    # Update the Pay Progression and FPR Visualization
+    # Pay Progression, FPR Progress, and Pay Erosion Visualization
     st.subheader("Pay Progression, FPR Progress, and Pay Erosion Visualization")
     selected_nodal_point = st.selectbox("Select Nodal Point", [name for name, _ in nodal_points], key="nodal_point_selector")
-    
+
     # Get data for the selected nodal point
     selected_data = next(item for item in results if item["Nodal Point"] == selected_nodal_point)
-    
-     # Create a combined bar and line chart using Plotly
-    fig = go.Figure()
-    
-    # Add bar chart for pay progression
-    fig.add_trace(
-        go.Bar(
-            x=[f"Year {i}" for i in range(num_years + 1)],
-            y=selected_data["Pay Progression Nominal"],
-            name="Nominal Pay"
-        )
-    )
-    
-    # Add line chart for FPR progress
-    fig.add_trace(
-        go.Scatter(
-            x=[f"Year {i}" for i in range(num_years + 1)],
-            y=[fpr for fpr in selected_data["FPR Progress by Year"]],
-            name="FPR Progress",
-            line=dict(color="green", width=2),
-            yaxis="y2"
-        )
-    )
-    
-    # Add line chart for Pay Erosion
-    fig.add_trace(
-        go.Scatter(
-            x=[f"Year {i}" for i in range(num_years + 1)],
-            y=[pe * 100 for pe in selected_data["Pay Erosion by Year"]],
-            name="Pay Erosion",
-            line=dict(color="red", width=2),
-            yaxis="y2"
-        )
-    )
-    
-    # Update layout
-    fig.update_layout(
-        title=f"Pay Progression, FPR Progress, and Pay Erosion for {selected_nodal_point}",
-        xaxis_title="Year",
-        yaxis_title="Pay (£)",
-        yaxis2=dict(title="Percentage (%)", overlaying="y", side="right", range=[0, 100]),
-        legend=dict(x=0, y=1, traceorder="normal"),
-        barmode="relative"
-    )
-    
-    # Display the chart
+
+    # Create and display the chart
+    fig = create_pay_progression_chart(selected_data)
     st.plotly_chart(fig, use_container_width=True)
 
-    # Display FPR progress and Pay Erosion
+    # Create and display the table
     st.write(f"FPR progress and Pay Erosion for {selected_nodal_point}:")
-    progress_df = pd.DataFrame({
-        "Year": [f"Year {i}" for i in range(num_years + 1)],
-        "FPR Progress (%)": selected_data["FPR Progress by Year"],
-        "Pay Erosion (%)": [pe * 100 for pe in selected_data["Pay Erosion by Year"]]
-    })
-    st.dataframe(progress_df)
+    progress_df = create_fpr_progress_table(selected_data)
+    st.table(progress_df)
 
     # Plot pay increase curve with cumulative cost
     st.subheader("Pay Increase Curve and Cumulative Cost")
