@@ -134,7 +134,7 @@ def setup_sidebar():
             on_change=update_fpr_targets
         )
     
-    num_years = st.sidebar.number_input("Number of years for the deal", min_value=1, max_value=10, value=5)
+    num_years = st.sidebar.number_input("Number of years for the deal", min_value=0, max_value=10, value=5)
     
     # Ensure FPR targets are calculated
     if not st.session_state.fpr_targets:
@@ -167,13 +167,13 @@ def setup_year_inputs(num_years, inflation_type):
     year_inputs = []
 
     # Initialize session state for all years
-    for year in range(num_years):
+    for year in range(num_years + 1):  # +1 to include year 0
         if f"nodal_percentages_{year}" not in st.session_state:
             st.session_state[f"nodal_percentages_{year}"] = {name: 0.0 if year == 0 else 7.0 for name, _, _ in NODAL_POINTS}
         if f"pound_increases_{year}" not in st.session_state:
             st.session_state[f"pound_increases_{year}"] = {name: 0 for name, _, _ in NODAL_POINTS}
 
-    for year in range(num_years):
+    for year in range(num_years + 1):  # +1 to include year 0
         with st.expander(f"Year {year} ({2023+year}/{2024+year})"):
             year_input = {
                 "nodal_percentages": {},
@@ -214,7 +214,7 @@ def setup_year_inputs(num_years, inflation_type):
                 st.write(f"Inflation for Year 0 (2023/2024): {year_input['inflation']*100:.1f}%")
             else:
                 year_input["inflation"] = st.slider(
-                    f"Projected Inflation for Year {year} ({2022+year}/{2023+year}) (%)",
+                    f"Projected Inflation for Year {year} ({2023+year}/{2024+year}) (%)",
                     min_value=0.0,
                     max_value=10.0,
                     value=2.0,
@@ -403,11 +403,14 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
 def display_cost_breakdown(results, year_inputs):
     st.subheader("Cost Breakdown by Year")
     
-    tabs = st.tabs([f"{'Initial Year' if year == 0 else f'MYPD {year}'}: {2023 + year}/{2024 + year}" for year in range(len(year_inputs))])
+    yearly_totals = []
+    
+    tabs = st.tabs([f"{'Initial Year' if year == 0 else f'Year {year}'}: {2023 + year}/{2024 + year}" for year in range(len(year_inputs))])
     
     for year, tab in enumerate(tabs):
         with tab:
             cost_data = []
+            year_total = 0
             for result in results:
                 if year < len(result["Yearly Basic Costs"]):
                     basic_pay_cost = result["Yearly Basic Costs"][year]
@@ -417,6 +420,8 @@ def display_cost_breakdown(results, year_inputs):
                 pension_cost = basic_pay_cost * 0.237
                 additional_hours = (basic_pay_cost / 40) * 8
                 ooh_component = additional_hours * 0.37
+                total_cost = basic_pay_cost + pension_cost + additional_hours + ooh_component
+                year_total += total_cost
                 
                 cost_data.append({
                     "Nodal Point": result["Nodal Point"],
@@ -424,40 +429,33 @@ def display_cost_breakdown(results, year_inputs):
                     "Pension Cost (23.7% employer contribution)": pension_cost,
                     "Additional Hours (8 hours)": additional_hours,
                     "OOH component (8 hours)": ooh_component,
-                    "Total Cost": basic_pay_cost + pension_cost + additional_hours + ooh_component
+                    "Total Cost": total_cost
                 })
             
-            if not cost_data:
-                st.write("No data available for this year.")
-                continue
-
             df = pd.DataFrame(cost_data)
             df = df.set_index("Nodal Point")
             
             # Format currency values
-            currency_cols = df.columns
-            for col in currency_cols:
+            for col in df.columns:
                 df[col] = df[col].apply(lambda x: f"£{x:,.2f}")
             
-            # Display the dataframe
             st.dataframe(df.style.set_properties(**{'text-align': 'right'}))
             
-            # Calculate and display totals
-            totals = df.applymap(lambda x: float(x.replace('£', '').replace(',', ''))).sum()
-            st.write("Totals:")
-            for col, total in totals.items():
-                st.write(f"{col}: £{total:,.2f}")
+            yearly_totals.append({"Year": f"Year {year} ({2023 + year}/{2024 + year})", "Total Cost": year_total})
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.metric(label=f"Total Cost for Year {year}", value=f"£{year_total:,.2f}")
+            with col2:
+                st.write(f"Cumulative Cost: £{sum(item['Total Cost'] for item in yearly_totals):,.2f}")
+    
+    total_nominal_cost = sum(item['Total Cost'] for item in yearly_totals)
+    st.metric(label="Total nominal cost of the deal", value=f"£{total_nominal_cost:,.2f}")
+    st.divider()
 
 def display_results(results, total_nominal_cost, total_real_cost, year_inputs):
     df_results = pd.DataFrame(results)
     st.dataframe(df_results)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric(label="Total real cost of the deal (above inflation)", value=f"£{total_real_cost:,.0f}")
-    with col2:
-        st.metric(label="Total nominal cost of the deal", value=f"£{total_nominal_cost:,.0f}")
-    st.divider()
     
     # Display the detailed cost breakdown
     display_cost_breakdown(results, year_inputs)
@@ -467,24 +465,24 @@ def display_visualizations(results, cumulative_costs, year_inputs, inflation_typ
     selected_nodal_point = st.selectbox("Select Nodal Point", [result["Nodal Point"] for result in results], key="nodal_point_selector")
     selected_data = next(item for item in results if item["Nodal Point"] == selected_nodal_point)
 
-    fig = create_pay_progression_chart(selected_data)
+    fig = create_pay_progression_chart(selected_data, num_years)
     st.plotly_chart(fig, use_container_width=True)
 
     st.write(f"FPR progress and Pay Erosion for {selected_nodal_point}:")
-    progress_df = create_fpr_progress_table(selected_data)
+    progress_df = create_fpr_progress_table(selected_data, num_years)
     st.table(progress_df)
 
     display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, num_years)
 
-def create_pay_progression_chart(selected_data):
-    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(len(selected_data["Pay Progression Nominal"]))]
-    nominal_pay = selected_data["Pay Progression Nominal"]
+def create_pay_progression_chart(selected_data, num_years):
+    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]  # +1 to include Year 0
+    nominal_pay = selected_data["Pay Progression Nominal"][:num_years + 1]  # Limit to selected number of years
     baseline_pay = nominal_pay[0]
     pay_increase = [max(0, pay - baseline_pay) for pay in nominal_pay]
     percent_increase = [(increase / baseline_pay) * 100 for increase in pay_increase]
     initial_pay_erosion = abs(selected_data["Real Terms Pay Cuts"][0])
-    pay_erosion = [abs(x) for x in selected_data["Real Terms Pay Cuts"]]
-    fpr_progress = selected_data["FPR Progress"]
+    pay_erosion = [abs(x) for x in selected_data["Real Terms Pay Cuts"][:num_years + 1]]  # Limit to selected number of years
+    fpr_progress = selected_data["FPR Progress"][:num_years + 1]  # Limit to selected number of years
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -525,13 +523,13 @@ def create_pay_progression_chart(selected_data):
 
     return fig
 
-def create_fpr_progress_table(selected_data):
-    years = [f"Year {i} ({2022+i}/{2023+i})" for i in range(len(selected_data["FPR Progress"]))]
+def create_fpr_progress_table(selected_data, num_years):
+    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]  # +1 to include Year 0
     
     df = pd.DataFrame({
         "Year": years,
-        "FPR Progress (%)": selected_data["FPR Progress"],
-        "Pay Erosion (%)": selected_data["Real Terms Pay Cuts"]
+        "FPR Progress (%)": selected_data["FPR Progress"][:num_years + 1],
+        "Pay Erosion (%)": selected_data["Real Terms Pay Cuts"][:num_years + 1]
     })
 
     df["FPR Progress (%)"] = df["FPR Progress (%)"].apply(lambda x: f"{x:.2f}")
@@ -539,42 +537,32 @@ def create_fpr_progress_table(selected_data):
 
     return df
 
-def display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, num_years):    
-    # Prepare data for the curve
-    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]
+def display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, num_years):
+    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]  # +1 to include Year 0
     
-    # Calculate average nominal increases across all nodal points
-    nominal_increases = [
+    nominal_increases = [0]  # Start with 0 for Year 0
+    nominal_increases += [
         sum(year_input["nodal_percentages"].values()) / len(year_input["nodal_percentages"])
         for year_input in year_inputs
     ]
+    nominal_increases = nominal_increases[:num_years + 1]  # Limit to selected number of years
     
-    # Add a 0 for the base year
-    nominal_increases = [0] + nominal_increases
-    
-    # Prepare inflation rates, including the base year
     inflation_rates = [0.033 if inflation_type == "RPI" else 0.023]  # Base year inflation
     inflation_rates += [year_input.get("inflation", inflation_rates[0]) for year_input in year_inputs]
-    
-    # Ensure nominal_increases and inflation_rates have the same length
-    max_length = max(len(nominal_increases), len(inflation_rates))
-    nominal_increases += [0] * (max_length - len(nominal_increases))
-    inflation_rates += [inflation_rates[-1]] * (max_length - len(inflation_rates))
+    inflation_rates = inflation_rates[:num_years + 1]  # Limit to selected number of years
     
     real_increases = [nominal_increases[i] - inflation_rates[i] for i in range(len(nominal_increases))]
     
-    # Ensure all lists have the same length
-    max_length = max(len(years), len(nominal_increases), len(real_increases), len(cumulative_costs))
-    years = years + [f"Year {i} ({2023+i}/{2024+i})" for i in range(len(years), max_length)]
-    nominal_increases = nominal_increases + [0] * (max_length - len(nominal_increases))
-    real_increases = real_increases + [0] * (max_length - len(real_increases))
-    cumulative_costs = cumulative_costs + [cumulative_costs[-1]] * (max_length - len(cumulative_costs))
+    cumulative_costs = cumulative_costs[:num_years + 1]  # Limit to selected number of years
+    
+    # Calculate the actual cumulative costs
+    actual_cumulative_costs = [sum(cumulative_costs[:i+1]) for i in range(len(cumulative_costs))]
     
     curve_data = pd.DataFrame({
         "Year": years,
         "Nominal Increase (including inflation)": [x * 100 for x in nominal_increases],
         "Real Increase (above inflation)": [x * 100 for x in real_increases],
-        "Cumulative Cost (£ millions)": [cost / 1e6 for cost in cumulative_costs],
+        "Cumulative Cost (£ millions)": [cost / 1e6 for cost in actual_cumulative_costs],
     })
     
     fig_curve = make_subplots(specs=[[{"secondary_y": True}]])
@@ -614,7 +602,7 @@ def main():
         fpr_percentages = st.session_state.fpr_targets
 
     doctor_counts = setup_doctor_counts()
-    year_inputs = setup_year_inputs(num_years, inflation_type)  # Pass inflation_type here
+    year_inputs = setup_year_inputs(num_years, inflation_type)
 
     results, total_nominal_cost, total_real_cost, cumulative_costs = calculate_results(
         fpr_percentages, doctor_counts, year_inputs, inflation_type
@@ -622,6 +610,7 @@ def main():
 
     display_results(results, total_nominal_cost, total_real_cost, year_inputs)
     display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years)
+
 
 if __name__ == "__main__":
     main()
