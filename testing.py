@@ -116,21 +116,23 @@ def setup_sidebar():
     
     inflation_type = st.sidebar.radio("Select inflation measure:", ("RPI", "CPI"), key="inflation_type", on_change=update_fpr_targets, horizontal=True)
     
-    fpr_start_year = st.sidebar.selectbox(
-        "FPR start year",
-        options=AVAILABLE_YEARS,
-        index=AVAILABLE_YEARS.index(st.session_state.fpr_start_year),
-        key="fpr_start_year",
-        on_change=update_end_year_options
-    )
-    
-    fpr_end_year = st.sidebar.selectbox(
-        "FPR end year",
-        options=st.session_state.end_year_options,
-        index=st.session_state.end_year_options.index(st.session_state.fpr_end_year),
-        key="fpr_end_year",
-        on_change=update_fpr_targets
-    )
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        fpr_start_year = st.selectbox(
+            "FPR start year",
+            options=AVAILABLE_YEARS,
+            index=AVAILABLE_YEARS.index(st.session_state.fpr_start_year),
+            key="fpr_start_year",
+            on_change=update_end_year_options
+        )
+    with col2:
+        fpr_end_year = st.selectbox(
+            "FPR end year",
+            options=st.session_state.end_year_options,
+            index=st.session_state.end_year_options.index(st.session_state.fpr_end_year),
+            key="fpr_end_year",
+            on_change=update_fpr_targets
+        )
     
     num_years = st.sidebar.number_input("Number of years for the deal", min_value=1, max_value=10, value=5)
     
@@ -161,49 +163,64 @@ def setup_doctor_counts():
     
     return doctor_counts
 
-def setup_year_inputs(num_years):
-    year_containers = [st.container() for _ in range(num_years)]
+def setup_year_inputs(num_years, inflation_type):
     year_inputs = []
 
     # Initialize session state for all years
     for year in range(num_years):
-        if f"percentage_{year}" not in st.session_state:
-            st.session_state[f"percentage_{year}"] = 0.0 if year == 0 else 2.0
         if f"nodal_percentages_{year}" not in st.session_state:
-            st.session_state[f"nodal_percentages_{year}"] = {name: 0.0 if year == 0 else 2.0 for name, _, _ in NODAL_POINTS}
-
-    def update_main_slider(year):
-        nodal_percentages = st.session_state[f"nodal_percentages_{year}"]
-        weighted_avg = calculate_weighted_average(nodal_percentages, st.session_state.doctor_counts)
-        st.session_state[f"percentage_{year}"] = weighted_avg * 100
-
-    def update_single_nodal(year, name):
-        st.session_state[f"nodal_percentages_{year}"][name] = st.session_state[f"nodal_{name}_{year}"] / 100
-        update_main_slider(year)
+            st.session_state[f"nodal_percentages_{year}"] = {name: 0.0 if year == 0 else 7.0 for name, _, _ in NODAL_POINTS}
+        if f"pound_increases_{year}" not in st.session_state:
+            st.session_state[f"pound_increases_{year}"] = {name: 0 for name, _, _ in NODAL_POINTS}
 
     for year in range(num_years):
-        with year_containers[year]:
-            st.subheader(f"Year {year} ({2023+year}/{2024+year})")
-            if year == 0:
-                year_input = setup_first_year_input()
-            else:
-                year_input = setup_subsequent_year_input(year)
+        with st.expander(f"Year {year} ({2023+year}/{2024+year})"):
+            year_input = {
+                "nodal_percentages": {},
+                "pound_increases": {},
+                "inflation": 0.0
+            }
             
-            # Add expander for individual nodal point adjustments
-            with st.expander(f"Adjust individual nodal points for Year {year} ({2023+year}/{2024+year})"):
-                nodal_percentages = {}
-                for name, _, _ in NODAL_POINTS:
-                    nodal_percentages[name] = st.slider(
-                        f"{name} increase (%)",
+            st.write("Consolidated pay offer:")
+            cols_consolidated = st.columns(5)
+            for i, (name, _, _) in enumerate(NODAL_POINTS):
+                with cols_consolidated[i]:
+                    year_input["pound_increases"][name] = st.number_input(
+                        f"{name}",
+                        min_value=0,
+                        max_value=10000,
+                        value=st.session_state[f"pound_increases_{year}"][name],
+                        step=100,
+                        key=f"pound_increase_{name}_{year}"
+                    )
+            
+            st.write("Percentage pay rise:")
+            cols_percentage = st.columns(5)
+            for i, (name, _, _) in enumerate(NODAL_POINTS):
+                with cols_percentage[i]:
+                    year_input["nodal_percentages"][name] = st.number_input(
+                        f"{name} (%)",
                         min_value=0.0,
                         max_value=20.0,
-                        value=st.session_state[f"nodal_percentages_{year}"][name] * 100,
+                        value=st.session_state[f"nodal_percentages_{year}"][name],
                         step=0.1,
-                        key=f"nodal_{name}_{year}",
-                        on_change=update_single_nodal,
-                        args=(year, name)
-                    )
-                year_input['nodal_percentages'] = {k: v / 100 for k, v in nodal_percentages.items()}
+                        format="%.1f",
+                        key=f"nodal_percentage_{name}_{year}"
+                    ) / 100
+            
+            if year == 0:
+                # Set fixed inflation rate for year 0
+                year_input["inflation"] = 0.033 if inflation_type == "RPI" else 0.023
+                st.write(f"Inflation for Year 0 (2023/2024): {year_input['inflation']*100:.1f}%")
+            else:
+                year_input["inflation"] = st.slider(
+                    f"Projected Inflation for Year {year} ({2022+year}/{2023+year}) (%)",
+                    min_value=0.0,
+                    max_value=10.0,
+                    value=2.0,
+                    step=0.1,
+                    key=f"inflation_{year}"
+                ) / 100
             
             year_inputs.append(year_input)
 
@@ -284,6 +301,7 @@ def calculate_results(fpr_percentages, doctor_counts, year_inputs, inflation_typ
 
     return results, total_nominal_cost, total_real_cost, cumulative_costs
 
+
 def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage, doctor_count, year_inputs, inflation_type):
     pay_progression_nominal = [base_pay, post_ddrb_pay]
     pay_progression_real = [base_pay, post_ddrb_pay]
@@ -299,19 +317,15 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
     # Calculate the pay rise from the existing 2023/2024 award
     existing_pay_rise = (post_ddrb_pay / base_pay) - 1
     
-    if year1_input["pound_increases"][name] > 0:
-        additional_increase = year1_input["pound_increases"][name] / base_pay
-    else:
-        additional_increase = year1_input["nodal_increases"][name]
+    # Add the consolidated pay rise and percentage increase separately
+    consolidated_increase = year1_input["pound_increases"][name]
+    percentage_increase = year1_input["nodal_percentages"][name]
     
-    total_pay_rise = existing_pay_rise + additional_increase
-    
-    # Add the additional increase for Year 1
-    total_pay_rise = existing_pay_rise + year1_input["nodal_increases"][name]
+    total_pay_rise = existing_pay_rise + (consolidated_increase / base_pay) + percentage_increase
     
     year1_real_terms_change = calculate_real_terms_change(total_pay_rise, year1_inflation)
     year1_pay_erosion = calculate_new_pay_erosion(real_terms_pay_cuts[0], year1_real_terms_change)
-    new_nominal_pay = post_ddrb_pay * (1 + year1_input["nodal_increases"][name])
+    new_nominal_pay = post_ddrb_pay * (1 + percentage_increase) + consolidated_increase
     new_real_pay = new_nominal_pay / (1 + year1_inflation)
 
     pay_progression_nominal.append(new_nominal_pay)
@@ -323,7 +337,7 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
 
     # Subsequent years
     for year_input in year_inputs[1:]:
-        nominal_increase = year_input["percentage"]
+        nominal_increase = year_input["nodal_percentages"][name]
         inflation_rate = year_input["inflation"]
         
         real_terms_change = calculate_real_terms_change(nominal_increase, inflation_rate)
@@ -352,7 +366,7 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         "Real Total Increase": pay_progression_real[-1] - base_pay,
         "Nominal Percent Increase": (pay_progression_nominal[-1] / base_pay - 1) * 100,
         "Real Percent Increase": (pay_progression_real[-1] / base_pay - 1) * 100,
-        "Real Terms Pay Cuts": [abs(x) * 100 for x in real_terms_pay_cuts],  # Convert to percentage and use absolute value
+        "Real Terms Pay Cuts": [abs(x) * 100 for x in real_terms_pay_cuts],
         "FPR Progress": fpr_progress,
         "Net Change in Pay": net_change_in_pay,
         "Doctor Count": doctor_count,
@@ -455,34 +469,30 @@ def create_fpr_progress_table(selected_data):
 def display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, num_years):    
     # Prepare data for the curve
     years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]
-    nominal_increases = [year_inputs[0]["percentage"]] + [year_input["percentage"] for year_input in year_inputs[1:]]
-    inflation_rates = [0.033 if inflation_type == "RPI" else 0.023] + [year_input["inflation"] for year_input in year_inputs[1:]]
+    
+    # Calculate average nominal increases across all nodal points
+    nominal_increases = [
+        sum(year_input["nodal_percentages"].values()) / len(year_input["nodal_percentages"])
+        for year_input in year_inputs
+    ]
+    
+    # Add a 0 for the base year
+    nominal_increases = [0] + nominal_increases
+    
+    # Prepare inflation rates, including the base year
+    inflation_rates = [0.033 if inflation_type == "RPI" else 0.023]  # Base year inflation
+    inflation_rates += [year_input.get("inflation", inflation_rates[0]) for year_input in year_inputs]
+    
+    # Ensure nominal_increases and inflation_rates have the same length
+    max_length = max(len(nominal_increases), len(inflation_rates))
+    nominal_increases += [0] * (max_length - len(nominal_increases))
+    inflation_rates += [inflation_rates[-1]] * (max_length - len(inflation_rates))
+    
     real_increases = [nominal_increases[i] - inflation_rates[i] for i in range(len(nominal_increases))]
     
     # Ensure all lists have the same length
     max_length = max(len(years), len(nominal_increases), len(real_increases), len(cumulative_costs))
     years = years + [f"Year {i} ({2023+i}/{2024+i})" for i in range(len(years), max_length)]
-    nominal_increases = nominal_increases + [0] * (max_length - len(nominal_increases))
-    real_increases = real_increases + [0] * (max_length - len(real_increases))
-    cumulative_costs = cumulative_costs + [cumulative_costs[-1]] * (max_length - len(cumulative_costs))
-    
-    curve_data = pd.DataFrame({
-        "Year": years,
-        "Nominal Increase (including inflation)": [x * 100 for x in nominal_increases],
-        "Real Increase (above inflation)": [x * 100 for x in real_increases],
-        "Cumulative Cost (£ millions)": [cost / 1e6 for cost in cumulative_costs],
-    })
-    st.subheader("Pay Increase Curve and Cumulative Cost")
-    
-    # Prepare data for the curve
-    years = [f"Year {i} ({2022+i}/{2023+i})" for i in range(num_years + 1)]
-    nominal_increases = [year_inputs[0]["percentage"]] + [year_input["percentage"] for year_input in year_inputs[1:]]
-    inflation_rates = [0.033 if inflation_type == "RPI" else 0.023] + [year_input["inflation"] for year_input in year_inputs[1:]]
-    real_increases = [nominal_increases[i] - inflation_rates[i] for i in range(len(nominal_increases))]
-    
-    # Ensure all lists have the same length
-    max_length = max(len(years), len(nominal_increases), len(real_increases), len(cumulative_costs))
-    years = years + [f"Year {i} ({2022+i}/{2023+i})" for i in range(len(years), max_length)]
     nominal_increases = nominal_increases + [0] * (max_length - len(nominal_increases))
     real_increases = real_increases + [0] * (max_length - len(real_increases))
     cumulative_costs = cumulative_costs + [cumulative_costs[-1]] * (max_length - len(cumulative_costs))
@@ -531,7 +541,7 @@ def main():
         fpr_percentages = st.session_state.fpr_targets
 
     doctor_counts = setup_doctor_counts()
-    year_inputs = setup_year_inputs(num_years)
+    year_inputs = setup_year_inputs(num_years, inflation_type)  # Pass inflation_type here
 
     results, total_nominal_cost, total_real_cost, cumulative_costs = calculate_results(
         fpr_percentages, doctor_counts, year_inputs, inflation_type
