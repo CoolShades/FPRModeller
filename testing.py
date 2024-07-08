@@ -330,8 +330,8 @@ def calculate_results(fpr_percentages, doctor_counts, year_inputs, inflation_typ
 
 
 def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage, doctor_count, year_inputs, inflation_type):
-    pay_progression_nominal = [base_pay, post_ddrb_pay]
-    pay_progression_real = [base_pay, post_ddrb_pay]
+    pay_progression_nominal = [base_pay]
+    pay_progression_real = [base_pay]
     real_terms_pay_cuts = [-fpr_percentage / 100]
     fpr_progress = [0]
     net_change_in_pay = [0]
@@ -340,16 +340,24 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
 
     for year, year_input in enumerate(year_inputs):
         if year == 0:
-            # Year 1 (2023/2024) calculations
-            existing_pay_rise = (post_ddrb_pay / base_pay) - 1
+            # Year 0 (2023/2024) calculations
             consolidated_increase = year_input["pound_increases"][name]
             percentage_increase = year_input["nodal_percentages"][name]
-            total_pay_rise = existing_pay_rise + (consolidated_increase / base_pay) + percentage_increase
-            new_nominal_pay = post_ddrb_pay * (1 + percentage_increase) + consolidated_increase
+            total_pay_rise = ((post_ddrb_pay - base_pay) / base_pay) + percentage_increase + (consolidated_increase / base_pay)
+            new_nominal_pay = base_pay * (1 + total_pay_rise)
+            
+            # Calculate only the additional cost beyond the already agreed pay deal
+            additional_pay_increase = new_nominal_pay - post_ddrb_pay
+            basic_pay_cost = additional_pay_increase * doctor_count
         else:
             # Subsequent years
-            total_pay_rise = year_input["nodal_percentages"][name]
-            new_nominal_pay = pay_progression_nominal[-1] * (1 + total_pay_rise)
+            consolidated_increase = year_input["pound_increases"][name]
+            percentage_increase = year_input["nodal_percentages"][name]
+            total_pay_rise = percentage_increase + (consolidated_increase / pay_progression_nominal[-1])
+            new_nominal_pay = pay_progression_nominal[-1] * (1 + percentage_increase) + consolidated_increase
+            
+            # Calculate the full cost for subsequent years
+            basic_pay_cost = (new_nominal_pay - pay_progression_nominal[-1]) * doctor_count
 
         inflation_rate = year_input["inflation"]
         new_real_pay = new_nominal_pay / (1 + inflation_rate)
@@ -361,14 +369,13 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         pay_progression_real.append(new_real_pay)
         real_terms_pay_cuts.append(current_pay_cut)
         
-        current_progress = (fpr_percentage / 100 - abs(current_pay_cut)) / (fpr_percentage / 100) * 100
-        fpr_progress.append(min(max(current_progress, 0), 100))
+        # Calculate FPR progress without capping at 100%
+        current_progress = (fpr_percentage / 100 + current_pay_cut) / (fpr_percentage / 100) * 100
+        fpr_progress.append(current_progress)
         
         net_change_in_pay.append(total_pay_rise * 100)
         
-        # Calculate costs
-        basic_pay_increase = new_nominal_pay - pay_progression_nominal[-2]
-        basic_pay_cost = basic_pay_increase * doctor_count
+        # Calculate additional costs
         pension_cost = basic_pay_cost * 0.237
         additional_hours_cost = (basic_pay_cost / 40) * 8
         ooh_component = additional_hours_cost * 0.37
@@ -388,49 +395,47 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         "Real Total Increase": pay_progression_real[-1] - base_pay,
         "Nominal Percent Increase": (pay_progression_nominal[-1] / base_pay - 1) * 100,
         "Real Percent Increase": (pay_progression_real[-1] / base_pay - 1) * 100,
-        "Real Terms Pay Cuts": [abs(x) * 100 for x in real_terms_pay_cuts],
-        "FPR Progress": fpr_progress,
-        "Net Change in Pay": net_change_in_pay,
+        "Real Terms Pay Cuts": real_terms_pay_cuts[1:],
+        "FPR Progress": fpr_progress[1:],
+        "Net Change in Pay": net_change_in_pay[1:],
         "Doctor Count": doctor_count,
         "Total Nominal Cost": sum(yearly_total_costs),
         "Total Real Cost": sum(yearly_total_costs) / (1 + year_inputs[-1]["inflation"]),
-        "Pay Progression Nominal": pay_progression_nominal,
-        "Pay Progression Real": pay_progression_real,
+        "Pay Progression Nominal": pay_progression_nominal[1:],
+        "Pay Progression Real": pay_progression_real[1:],
         "Yearly Basic Costs": yearly_basic_costs,
         "Yearly Total Costs": yearly_total_costs,
     }
-
 def display_cost_breakdown(results, year_inputs):
     st.subheader("Cost Breakdown by Year")
     
-    yearly_totals = []
+    num_years = len(year_inputs)
+    tabs = st.tabs([f"{'Initial Year' if year == 0 else f'Year {year}'}: {2023 + year}/{2024 + year}" for year in range(num_years)])
     
-    tabs = st.tabs([f"{'Initial Year' if year == 0 else f'Year {year}'}: {2023 + year}/{2024 + year}" for year in range(len(year_inputs))])
-    
+    cumulative_cost = 0
     for year, tab in enumerate(tabs):
         with tab:
             cost_data = []
             year_total = 0
+            
             for result in results:
-                if year < len(result["Yearly Basic Costs"]):
+                if year < len(result["Yearly Total Costs"]):
+                    total_cost = result["Yearly Total Costs"][year]
                     basic_pay_cost = result["Yearly Basic Costs"][year]
-                else:
-                    continue
-                
-                pension_cost = basic_pay_cost * 0.237
-                additional_hours = (basic_pay_cost / 40) * 8
-                ooh_component = additional_hours * 0.37
-                total_cost = basic_pay_cost + pension_cost + additional_hours + ooh_component
-                year_total += total_cost
-                
-                cost_data.append({
-                    "Nodal Point": result["Nodal Point"],
-                    "Total Gov Offer Cost (BASIC PAY ONLY)": basic_pay_cost,
-                    "Pension Cost (23.7% employer contribution)": pension_cost,
-                    "Additional Hours (8 hours)": additional_hours,
-                    "OOH component (8 hours)": ooh_component,
-                    "Total Cost": total_cost
-                })
+                    pension_cost = basic_pay_cost * 0.237
+                    additional_hours = (basic_pay_cost / 40) * 8
+                    ooh_component = additional_hours * 0.37
+                    
+                    year_total += total_cost
+                    
+                    cost_data.append({
+                        "Nodal Point": result["Nodal Point"],
+                        "Total Gov Offer Cost (BASIC PAY ONLY)": basic_pay_cost,
+                        "Pension Cost (23.7% employer contribution)": pension_cost,
+                        "Additional Hours (8 hours)": additional_hours,
+                        "OOH component (8 hours)": ooh_component,
+                        "Total Cost": total_cost
+                    })
             
             df = pd.DataFrame(cost_data)
             df = df.set_index("Nodal Point")
@@ -441,16 +446,15 @@ def display_cost_breakdown(results, year_inputs):
             
             st.dataframe(df.style.set_properties(**{'text-align': 'right'}))
             
-            yearly_totals.append({"Year": f"Year {year} ({2023 + year}/{2024 + year})", "Total Cost": year_total})
+            cumulative_cost += year_total
             
             col1, col2 = st.columns([3, 1])
             with col1:
                 st.metric(label=f"Total Cost for Year {year}", value=f"£{year_total:,.2f}")
             with col2:
-                st.write(f"Cumulative Cost: £{sum(item['Total Cost'] for item in yearly_totals):,.2f}")
-    
-    total_nominal_cost = sum(item['Total Cost'] for item in yearly_totals)
-    st.metric(label="Total nominal cost of the deal", value=f"£{total_nominal_cost:,.2f}")
+                st.write(f"Cumulative Cost: £{cumulative_cost:,.2f}")
+
+    st.metric(label="Total nominal cost of the deal", value=f"£{cumulative_cost:,.2f}")
     st.divider()
 
 def display_results(results, total_nominal_cost, total_real_cost, year_inputs):
@@ -475,14 +479,13 @@ def display_visualizations(results, cumulative_costs, year_inputs, inflation_typ
     display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, num_years)
 
 def create_pay_progression_chart(selected_data, num_years):
-    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]  # +1 to include Year 0
-    nominal_pay = selected_data["Pay Progression Nominal"][:num_years + 1]  # Limit to selected number of years
-    baseline_pay = nominal_pay[0]
+    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]
+    nominal_pay = selected_data["Pay Progression Nominal"]
+    baseline_pay = selected_data["Base Pay"]
     pay_increase = [max(0, pay - baseline_pay) for pay in nominal_pay]
     percent_increase = [(increase / baseline_pay) * 100 for increase in pay_increase]
-    initial_pay_erosion = abs(selected_data["Real Terms Pay Cuts"][0])
-    pay_erosion = [abs(x) for x in selected_data["Real Terms Pay Cuts"][:num_years + 1]]  # Limit to selected number of years
-    fpr_progress = selected_data["FPR Progress"][:num_years + 1]  # Limit to selected number of years
+    pay_erosion = [abs(x) for x in selected_data["Real Terms Pay Cuts"]]
+    fpr_progress = selected_data["FPR Progress"]
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -524,16 +527,18 @@ def create_pay_progression_chart(selected_data, num_years):
     return fig
 
 def create_fpr_progress_table(selected_data, num_years):
-    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]  # +1 to include Year 0
+    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]
     
     df = pd.DataFrame({
         "Year": years,
-        "FPR Progress (%)": selected_data["FPR Progress"][:num_years + 1],
-        "Pay Erosion (%)": selected_data["Real Terms Pay Cuts"][:num_years + 1]
+        "FPR Progress (%)": selected_data["FPR Progress"],
+        "Pay Erosion (%)": selected_data["Real Terms Pay Cuts"]
     })
 
     df["FPR Progress (%)"] = df["FPR Progress (%)"].apply(lambda x: f"{x:.2f}")
-    df["Pay Erosion (%)"] = df["Pay Erosion (%)"].apply(lambda x: f"{x:.2f}")
+    
+    # Reverse polarity and convert to percentage for display
+    df["Pay Erosion (%)"] = df["Pay Erosion (%)"].apply(lambda x: f"{-x * 100:.2f}")
 
     return df
 
@@ -591,6 +596,40 @@ def display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, nu
     st.plotly_chart(fig_curve, use_container_width=True)
     st.caption("Note: Cumulative Cost is shown in millions of pounds")
 
+def will_fpr_be_achieved(results):
+    fpr_achieved = all(result["FPR Progress"][-1] >= 100 for result in results)
+    return fpr_achieved
+
+def display_fpr_achievement(results):
+    st.divider()
+    st.subheader("Will FPR be achieved from this pay deal?")
+    fpr_achieved = all(result["FPR Progress"][-1] >= 100 for result in results)
+    
+    if fpr_achieved:
+        st.success("Yes, FPR will be achieved for all nodal points.")
+    else:
+        st.error("No, FPR will not be achieved for all nodal points.")
+    
+    # Display detailed FPR progress for each nodal point using st.metric
+    cols = st.columns(len(results))
+    for i, result in enumerate(results):
+        with cols[i]:
+            fpr_progress = result["FPR Progress"][-1]
+            pay_erosion = result["Real Terms Pay Cuts"][-1]
+            
+            # Format pay erosion as a percentage with reversed polarity
+            pay_erosion_formatted = f"{pay_erosion * 100:.2f}%"
+            
+            # Format FPR progress for delta
+            fpr_progress_formatted = f"FPR: {fpr_progress:.2f}%"
+            
+            st.metric(
+                label=f"{result['Nodal Point']}",
+                value=pay_erosion_formatted,
+                delta=fpr_progress_formatted,
+                delta_color="normal"  # This ensures the delta is green for positive values
+            )
+    st.divider()
 def main():
     st.title("Doctor Pay Model with Dynamic FPR Calculation")
 
@@ -608,6 +647,7 @@ def main():
         fpr_percentages, doctor_counts, year_inputs, inflation_type
     )
 
+    display_fpr_achievement(results)  # Add this line
     display_results(results, total_nominal_cost, total_real_cost, year_inputs)
     display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years)
 
