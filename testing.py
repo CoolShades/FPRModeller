@@ -310,7 +310,6 @@ def setup_subsequent_year_input(year):
         "nodal_percentages": st.session_state[f"nodal_percentages_{year}"]
     }
 
-# Calculation Functions
 def calculate_results(fpr_percentages, doctor_counts, year_inputs, inflation_type):
     results = []
     total_nominal_cost = 0
@@ -320,13 +319,14 @@ def calculate_results(fpr_percentages, doctor_counts, year_inputs, inflation_typ
     for name, base_pay, post_ddrb_pay in NODAL_POINTS:
         result = calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentages[name], doctor_counts[name], year_inputs, inflation_type)
         results.append(result)
-        total_nominal_cost += result["Nominal Nodal Cost"]
-        total_real_cost += result["Real Nodal Cost"]
+        total_nominal_cost += result["Total Nominal Cost"]
+        total_real_cost += result["Total Real Cost"]
 
-        for j, cost in enumerate(result["Yearly Costs"]):
+        for j, cost in enumerate(result["Yearly Total Costs"]):
             cumulative_costs[j] += cost
 
     return results, total_nominal_cost, total_real_cost, cumulative_costs
+
 
 
 def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage, doctor_count, year_inputs, inflation_type):
@@ -335,42 +335,26 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
     real_terms_pay_cuts = [-fpr_percentage / 100]
     fpr_progress = [0]
     net_change_in_pay = [0]
-    yearly_costs = []
+    yearly_basic_costs = []
+    yearly_total_costs = []
 
-    # Year 1 (2023/2024) calculations
-    year1_input = year_inputs[0]
-    year1_inflation = 0.033 if inflation_type == "RPI" else 0.023
-    
-    # Calculate the pay rise from the existing 2023/2024 award
-    existing_pay_rise = (post_ddrb_pay / base_pay) - 1
-    
-    # Add the consolidated pay rise and percentage increase separately
-    consolidated_increase = year1_input["pound_increases"][name]
-    percentage_increase = year1_input["nodal_percentages"][name]
-    
-    total_pay_rise = existing_pay_rise + (consolidated_increase / base_pay) + percentage_increase
-    
-    year1_real_terms_change = calculate_real_terms_change(total_pay_rise, year1_inflation)
-    year1_pay_erosion = calculate_new_pay_erosion(real_terms_pay_cuts[0], year1_real_terms_change)
-    new_nominal_pay = post_ddrb_pay * (1 + percentage_increase) + consolidated_increase
-    new_real_pay = new_nominal_pay / (1 + year1_inflation)
+    for year, year_input in enumerate(year_inputs):
+        if year == 0:
+            # Year 1 (2023/2024) calculations
+            existing_pay_rise = (post_ddrb_pay / base_pay) - 1
+            consolidated_increase = year_input["pound_increases"][name]
+            percentage_increase = year_input["nodal_percentages"][name]
+            total_pay_rise = existing_pay_rise + (consolidated_increase / base_pay) + percentage_increase
+            new_nominal_pay = post_ddrb_pay * (1 + percentage_increase) + consolidated_increase
+        else:
+            # Subsequent years
+            total_pay_rise = year_input["nodal_percentages"][name]
+            new_nominal_pay = pay_progression_nominal[-1] * (1 + total_pay_rise)
 
-    pay_progression_nominal.append(new_nominal_pay)
-    pay_progression_real.append(new_real_pay)
-    real_terms_pay_cuts.append(year1_pay_erosion)
-    fpr_progress.append((fpr_percentage / 100 - abs(year1_pay_erosion)) / (fpr_percentage / 100) * 100)
-    net_change_in_pay.append(total_pay_rise * 100)
-    yearly_costs.append((new_nominal_pay - base_pay) * doctor_count)
-
-    # Subsequent years
-    for year_input in year_inputs[1:]:
-        nominal_increase = year_input["nodal_percentages"][name]
         inflation_rate = year_input["inflation"]
-        
-        real_terms_change = calculate_real_terms_change(nominal_increase, inflation_rate)
-        new_nominal_pay = pay_progression_nominal[-1] * (1 + nominal_increase)
         new_real_pay = new_nominal_pay / (1 + inflation_rate)
         
+        real_terms_change = calculate_real_terms_change(total_pay_rise, inflation_rate)
         current_pay_cut = calculate_new_pay_erosion(real_terms_pay_cuts[-1], real_terms_change)
         
         pay_progression_nominal.append(new_nominal_pay)
@@ -380,8 +364,19 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         current_progress = (fpr_percentage / 100 - abs(current_pay_cut)) / (fpr_percentage / 100) * 100
         fpr_progress.append(min(max(current_progress, 0), 100))
         
-        net_change_in_pay.append(nominal_increase * 100)
-        yearly_costs.append((new_nominal_pay - pay_progression_nominal[-2]) * doctor_count)
+        net_change_in_pay.append(total_pay_rise * 100)
+        
+        # Calculate costs
+        basic_pay_increase = new_nominal_pay - pay_progression_nominal[-2]
+        basic_pay_cost = basic_pay_increase * doctor_count
+        pension_cost = basic_pay_cost * 0.237
+        additional_hours_cost = (basic_pay_cost / 40) * 8
+        ooh_component = additional_hours_cost * 0.37
+        
+        total_cost = basic_pay_cost + pension_cost + additional_hours_cost + ooh_component
+        
+        yearly_basic_costs.append(basic_pay_cost)
+        yearly_total_costs.append(total_cost)
 
     return {
         "Nodal Point": name,
@@ -397,15 +392,63 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         "FPR Progress": fpr_progress,
         "Net Change in Pay": net_change_in_pay,
         "Doctor Count": doctor_count,
-        "Nominal Nodal Cost": (pay_progression_nominal[-1] - base_pay) * doctor_count,
-        "Real Nodal Cost": (pay_progression_real[-1] - base_pay) * doctor_count,
+        "Total Nominal Cost": sum(yearly_total_costs),
+        "Total Real Cost": sum(yearly_total_costs) / (1 + year_inputs[-1]["inflation"]),
         "Pay Progression Nominal": pay_progression_nominal,
         "Pay Progression Real": pay_progression_real,
-        "Yearly Costs": yearly_costs,
+        "Yearly Basic Costs": yearly_basic_costs,
+        "Yearly Total Costs": yearly_total_costs,
     }
 
-# Display Functions
-def display_results(results, total_nominal_cost, total_real_cost):
+def display_cost_breakdown(results, year_inputs):
+    st.subheader("Cost Breakdown by Year")
+    
+    tabs = st.tabs([f"{'Initial Year' if year == 0 else f'MYPD {year}'}: {2023 + year}/{2024 + year}" for year in range(len(year_inputs))])
+    
+    for year, tab in enumerate(tabs):
+        with tab:
+            cost_data = []
+            for result in results:
+                if year < len(result["Yearly Basic Costs"]):
+                    basic_pay_cost = result["Yearly Basic Costs"][year]
+                else:
+                    continue
+                
+                pension_cost = basic_pay_cost * 0.237
+                additional_hours = (basic_pay_cost / 40) * 8
+                ooh_component = additional_hours * 0.37
+                
+                cost_data.append({
+                    "Nodal Point": result["Nodal Point"],
+                    "Total Gov Offer Cost (BASIC PAY ONLY)": basic_pay_cost,
+                    "Pension Cost (23.7% employer contribution)": pension_cost,
+                    "Additional Hours (8 hours)": additional_hours,
+                    "OOH component (8 hours)": ooh_component,
+                    "Total Cost": basic_pay_cost + pension_cost + additional_hours + ooh_component
+                })
+            
+            if not cost_data:
+                st.write("No data available for this year.")
+                continue
+
+            df = pd.DataFrame(cost_data)
+            df = df.set_index("Nodal Point")
+            
+            # Format currency values
+            currency_cols = df.columns
+            for col in currency_cols:
+                df[col] = df[col].apply(lambda x: f"£{x:,.2f}")
+            
+            # Display the dataframe
+            st.dataframe(df.style.set_properties(**{'text-align': 'right'}))
+            
+            # Calculate and display totals
+            totals = df.applymap(lambda x: float(x.replace('£', '').replace(',', ''))).sum()
+            st.write("Totals:")
+            for col, total in totals.items():
+                st.write(f"{col}: £{total:,.2f}")
+
+def display_results(results, total_nominal_cost, total_real_cost, year_inputs):
     df_results = pd.DataFrame(results)
     st.dataframe(df_results)
     
@@ -413,9 +456,12 @@ def display_results(results, total_nominal_cost, total_real_cost):
     with col1:
         st.metric(label="Total real cost of the deal (above inflation)", value=f"£{total_real_cost:,.0f}")
     with col2:
-        st.metric(label="Total nominal cost of the deal (BASIC PAY ONLY)", value=f"£{total_nominal_cost:,.0f}")
+        st.metric(label="Total nominal cost of the deal", value=f"£{total_nominal_cost:,.0f}")
     st.divider()
-
+    
+    # Display the detailed cost breakdown
+    display_cost_breakdown(results, year_inputs)
+    
 def display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years):
     st.subheader("Pay Progression, FPR Progress, and Pay Erosion Visualization")
     selected_nodal_point = st.selectbox("Select Nodal Point", [result["Nodal Point"] for result in results], key="nodal_point_selector")
@@ -574,7 +620,7 @@ def main():
         fpr_percentages, doctor_counts, year_inputs, inflation_type
     )
 
-    display_results(results, total_nominal_cost, total_real_cost)
+    display_results(results, total_nominal_cost, total_real_cost, year_inputs)
     display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years)
 
 if __name__ == "__main__":
