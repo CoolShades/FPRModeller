@@ -222,6 +222,33 @@ def setup_year_inputs(num_years, inflation_type):
                     key=f"inflation_{year}"
                 ) / 100
             
+            # Calculate and display net change in pay for each nodal point
+            st.write("Net change in pay:")
+            cols_net_change = st.columns(5)
+            for i, (name, base_pay, _) in enumerate(NODAL_POINTS):
+                with cols_net_change[i]:
+                    consolidated_increase = year_input["pound_increases"][name]
+                    percentage_increase = year_input["nodal_percentages"][name]
+                    inflation_rate = year_input["inflation"]
+                    
+                    if year == 0:
+                        # For year 0, consider the existing DDRB award
+                        existing_award = NODAL_POINTS[i][2] - base_pay
+                        net_change = existing_award + consolidated_increase + (base_pay * percentage_increase)
+                        total_percentage_increase = (net_change / base_pay)
+                    else:
+                        net_change = consolidated_increase + (base_pay * percentage_increase)
+                        total_percentage_increase = (net_change / base_pay)
+                    
+                    # Calculate real terms pay increase
+                    real_terms_increase = ((1 + total_percentage_increase) / (1 + inflation_rate)) - 1
+                    
+                    st.metric(
+                        label=f"{name}",
+                        value=f"£{net_change:,.0f}",
+                        delta=f"{real_terms_increase*100:.1f}%"
+                    )
+            
             year_inputs.append(year_input)
 
     return year_inputs
