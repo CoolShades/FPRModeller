@@ -78,8 +78,7 @@ def update_first_year_nodal_percentages():
             st.session_state[f"nodal_percentages_{year}"][name] = pound_increase / base_pay
     else:
         update_nodal_percentages(year)
-        
-        
+
 def initialize_session_state():
     if 'fpr_start_year' not in st.session_state:
         st.session_state.fpr_start_year = AVAILABLE_YEARS[0]
@@ -107,16 +106,16 @@ def update_end_year_options():
     if st.session_state.fpr_end_year not in st.session_state.end_year_options:
         st.session_state.fpr_end_year = st.session_state.end_year_options[-1]
     update_fpr_targets()
-    
+
 # UI Setup Functions
 def setup_sidebar():
     initialize_session_state()
     
-    st.sidebar.title("Doctor Pay Model Settings")
+    st.sidebar.title("Modeller Settings")
     
     inflation_type = st.sidebar.radio("Select inflation measure:", ("RPI", "CPI"), key="inflation_type", on_change=update_fpr_targets, horizontal=True)
     
-    col1, col2 = st.sidebar.columns(2)
+    col1, col2, col3 = st.sidebar.columns(3)
     with col1:
         fpr_start_year = st.selectbox(
             "FPR start year",
@@ -133,37 +132,36 @@ def setup_sidebar():
             key="fpr_end_year",
             on_change=update_fpr_targets
         )
-    
-    num_years = st.sidebar.number_input("Number of years for the deal", min_value=0, max_value=10, value=5)
+    with col3:
+        num_years = st.number_input("Number of Years", min_value=0, max_value=10, value=5)
     
     # Ensure FPR targets are calculated
     if not st.session_state.fpr_targets:
         update_fpr_targets()
     
-    # Display FPR targets
-    fpr_df = pd.DataFrame(list(st.session_state.fpr_targets.items()), columns=['Nodal Point', 'FPR Target (%)'])
-    fpr_df['FPR Target (%)'] = fpr_df['FPR Target (%)'].round(1)
-    st.sidebar.dataframe(fpr_df, hide_index=True)
+    # Display FPR targets as a single line of text
+    fpr_text = "FPR Targets: "
+    fpr_values = ", ".join([f"N{i+1}: {value:.1f}%" for i, value in enumerate(st.session_state.fpr_targets.values())])
+    st.sidebar.write(f":red{fpr_text}{fpr_values}")
     
-    return inflation_type, fpr_start_year, fpr_end_year, num_years, st.session_state.fpr_targets
-
-
-def setup_doctor_counts():
-    st.subheader("Number of Doctors in Each Nodal Point")
-    cols = st.columns(5)
+    # Move doctor counts setup to sidebar with columns
+    st.sidebar.subheader("Number of Doctors in Each Nodal Point")
+    cols = st.sidebar.columns(5)
     doctor_counts = {}
     default_counts = [8000, 6000, 20000, 25000, 6000]
     for i, (name, _, _) in enumerate(NODAL_POINTS):
         with cols[i]:
-            count = st.number_input(f"{name}", min_value=0, value=default_counts[i], step=100, key=f"doctors_{name}")
-            doctor_counts[name] = count
+            doctor_counts[name] = st.number_input(f"{name}", min_value=0, value=default_counts[i], step=100, key=f"doctors_{name}")
     
     # Store doctor_counts in session state
     st.session_state.doctor_counts = doctor_counts
     
-    return doctor_counts
+    # Move year inputs setup to sidebar
+    year_inputs = setup_year_inputs_sidebar(num_years, inflation_type)
+    
+    return inflation_type, fpr_start_year, fpr_end_year, num_years, st.session_state.fpr_targets, doctor_counts, year_inputs
 
-def setup_year_inputs(num_years, inflation_type):
+def setup_year_inputs_sidebar(num_years, inflation_type):
     year_inputs = []
 
     # Initialize session state for all years
@@ -174,7 +172,7 @@ def setup_year_inputs(num_years, inflation_type):
             st.session_state[f"pound_increases_{year}"] = {name: 0 for name, _, _ in NODAL_POINTS}
 
     for year in range(num_years + 1):  # +1 to include year 0
-        with st.expander(f"Year {year} ({2023+year}/{2024+year})"):
+        with st.sidebar.expander(f"Year {year} ({2023+year}/{2024+year})"):
             year_input = {
                 "nodal_percentages": {},
                 "pound_increases": {},
@@ -182,9 +180,9 @@ def setup_year_inputs(num_years, inflation_type):
             }
             
             st.write("Consolidated pay offer:")
-            cols_consolidated = st.columns(5)
+            cols = st.columns(5)
             for i, (name, _, _) in enumerate(NODAL_POINTS):
-                with cols_consolidated[i]:
+                with cols[i]:
                     year_input["pound_increases"][name] = st.number_input(
                         f"{name}",
                         min_value=0,
@@ -195,9 +193,9 @@ def setup_year_inputs(num_years, inflation_type):
                     )
             
             st.write("Percentage pay rise:")
-            cols_percentage = st.columns(5)
+            cols = st.columns(5)
             for i, (name, _, _) in enumerate(NODAL_POINTS):
-                with cols_percentage[i]:
+                with cols[i]:
                     year_input["nodal_percentages"][name] = st.number_input(
                         f"{name} (%)",
                         min_value=0.0,
@@ -222,93 +220,9 @@ def setup_year_inputs(num_years, inflation_type):
                     key=f"inflation_{year}"
                 ) / 100
             
-            # Calculate and display net change in pay for each nodal point
-            st.write("Net change in pay:")
-            cols_net_change = st.columns(5)
-            for i, (name, base_pay, _) in enumerate(NODAL_POINTS):
-                with cols_net_change[i]:
-                    consolidated_increase = year_input["pound_increases"][name]
-                    percentage_increase = year_input["nodal_percentages"][name]
-                    inflation_rate = year_input["inflation"]
-                    
-                    if year == 0:
-                        # For year 0, consider the existing DDRB award
-                        existing_award = NODAL_POINTS[i][2] - base_pay
-                        net_change = existing_award + consolidated_increase + (base_pay * percentage_increase)
-                        total_percentage_increase = (net_change / base_pay)
-                    else:
-                        net_change = consolidated_increase + (base_pay * percentage_increase)
-                        total_percentage_increase = (net_change / base_pay)
-                    
-                    # Calculate real terms pay increase
-                    real_terms_increase = ((1 + total_percentage_increase) / (1 + inflation_rate)) - 1
-                    
-                    st.metric(
-                        label=f"{name}",
-                        value=f"£{net_change:,.0f}",
-                        delta=f"{real_terms_increase*100:.1f}%"
-                    )
-            
             year_inputs.append(year_input)
 
     return year_inputs
-
-def setup_first_year_input():
-    st.write("Additional offer for 2023/2024 (on top of existing award)")
-    
-    # Global percentage increase
-    percentage_increase = st.slider(
-        "Global Percentage increase (%)", 
-        min_value=0.0, 
-        max_value=20.0, 
-        value=st.session_state["percentage_0"], 
-        step=0.1, 
-        key="year1_percentage",
-        on_change=update_first_year_nodal_percentages
-    )
-    
-    # Individual nodal point increases
-    st.write("OR Consolidated pay rise (£) for each nodal point:")
-    pound_increases = {}
-    cols = st.columns(len(NODAL_POINTS))
-    for i, (name, _, _) in enumerate(NODAL_POINTS):
-        with cols[i]:
-            pound_increases[name] = st.number_input(
-                f"{name}", 
-                min_value=0, 
-                max_value=10000, 
-                value=0, 
-                step=100, 
-                key=f"year1_pound_{name}",
-                on_change=update_first_year_nodal_percentages
-            )
-    
-    nodal_increases = st.session_state["nodal_percentages_0"]
-
-    return {
-        "percentage": percentage_increase / 100,
-        "pound_increases": pound_increases,
-        "nodal_increases": nodal_increases
-    }
-
-def setup_subsequent_year_input(year):
-    inflation_rate = st.slider(f"Projected Inflation for Year {year} ({2022+year}/{2023+year}) (%)", min_value=0.0, max_value=10.0, value=2.0, step=0.1, key=f"inflation_{year}")
-    percentage_increase = st.slider(
-        f"Pay Rise for Year {year} ({2022+year}/{2023+year}) (%)", 
-        min_value=0.0, 
-        max_value=20.0, 
-        value=st.session_state[f"percentage_{year}"], 
-        step=0.1, 
-        key=f"percentage_{year}",
-        on_change=update_nodal_percentages,
-        args=(year,)
-    )
-    
-    return {
-        "inflation": inflation_rate / 100,
-        "percentage": percentage_increase / 100,
-        "nodal_percentages": st.session_state[f"nodal_percentages_{year}"]
-    }
 
 def calculate_results(fpr_percentages, doctor_counts, year_inputs, inflation_type):
     results = []
@@ -326,8 +240,6 @@ def calculate_results(fpr_percentages, doctor_counts, year_inputs, inflation_typ
             cumulative_costs[j] += cost
 
     return results, total_nominal_cost, total_real_cost, cumulative_costs
-
-
 
 def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage, doctor_count, year_inputs, inflation_type):
     pay_progression_nominal = [base_pay]
@@ -406,6 +318,7 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         "Yearly Basic Costs": yearly_basic_costs,
         "Yearly Total Costs": yearly_total_costs,
     }
+
 def display_cost_breakdown(results, year_inputs):
     st.subheader("Cost Breakdown by Year")
     
@@ -430,11 +343,11 @@ def display_cost_breakdown(results, year_inputs):
                     
                     cost_data.append({
                         "Nodal Point": result["Nodal Point"],
-                        "Total Gov Offer Cost (BASIC PAY ONLY)": basic_pay_cost,
-                        "Pension Cost (23.7% employer contribution)": pension_cost,
-                        "Additional Hours (8 hours)": additional_hours,
-                        "OOH component (8 hours)": ooh_component,
-                        "Total Cost": total_cost
+                        "Basic Pay Costs": basic_pay_cost,
+                        "Pension Costs": pension_cost,
+                        "Additional Hours Costs": additional_hours,
+                        "OOH Costs": ooh_component,
+                        "Total Costs": total_cost
                     })
             
             df = pd.DataFrame(cost_data)
@@ -458,14 +371,16 @@ def display_cost_breakdown(results, year_inputs):
     st.divider()
 
 def display_results(results, total_nominal_cost, total_real_cost, year_inputs):
+    # Display the detailed cost breakdown
+    st.divider()
+    display_cost_breakdown(results, year_inputs)
+    
+    st.write("All Calculation Summary Table")
     df_results = pd.DataFrame(results)
     st.dataframe(df_results)
     
-    # Display the detailed cost breakdown
-    display_cost_breakdown(results, year_inputs)
-    
 def display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years):
-    st.subheader("Pay Progression, FPR Progress, and Pay Erosion Visualization")
+    st.subheader("Pay Progression & FPR Progress Visualisation")
     selected_nodal_point = st.selectbox("Select Nodal Point", [result["Nodal Point"] for result in results], key="nodal_point_selector")
     selected_data = next(item for item in results if item["Nodal Point"] == selected_nodal_point)
 
@@ -473,7 +388,7 @@ def display_visualizations(results, cumulative_costs, year_inputs, inflation_typ
     st.plotly_chart(fig, use_container_width=True)
 
     st.write(f"FPR progress and Pay Erosion for {selected_nodal_point}:")
-    progress_df = create_fpr_progress_table(selected_data, num_years)
+    progress_df = create_fpr_progress_table(selected_data, num_years, year_inputs)
     st.table(progress_df)
 
     display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, num_years)
@@ -484,7 +399,7 @@ def create_pay_progression_chart(selected_data, num_years):
     baseline_pay = selected_data["Base Pay"]
     pay_increase = [max(0, pay - baseline_pay) for pay in nominal_pay]
     percent_increase = [(increase / baseline_pay) * 100 for increase in pay_increase]
-    pay_erosion = [abs(x) for x in selected_data["Real Terms Pay Cuts"]]
+    pay_erosion = [-(x) * 100 for x in selected_data["Real Terms Pay Cuts"]]
     fpr_progress = selected_data["FPR Progress"]
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
@@ -526,18 +441,35 @@ def create_pay_progression_chart(selected_data, num_years):
 
     return fig
 
-def create_fpr_progress_table(selected_data, num_years):
+def create_fpr_progress_table(selected_data, num_years, year_inputs):
     years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]
+    
+    pay_rises = []
+    for year, year_input in enumerate(year_inputs):
+        inflation = year_input["inflation"] * 100
+        percentage_increase = selected_data["Net Change in Pay"][year]
+        consolidated_increase = year_input["pound_increases"][selected_data["Nodal Point"]]
+        
+        difference = percentage_increase - inflation
+        
+        if difference >= 0:
+            pay_rise = f"Inflation + {difference:.1f}%"
+        else:
+            pay_rise = f"Inflation - {abs(difference):.1f}%"
+        
+        if consolidated_increase > 0:
+            pay_rise += f" + £{consolidated_increase:,}"
+        
+        pay_rises.append(pay_rise)
     
     df = pd.DataFrame({
         "Year": years,
+        "Pay Rise": pay_rises,
         "FPR Progress (%)": selected_data["FPR Progress"],
         "Pay Erosion (%)": selected_data["Real Terms Pay Cuts"]
     })
 
     df["FPR Progress (%)"] = df["FPR Progress (%)"].apply(lambda x: f"{x:.2f}")
-    
-    # Reverse polarity and convert to percentage for display
     df["Pay Erosion (%)"] = df["Pay Erosion (%)"].apply(lambda x: f"{-x * 100:.2f}")
 
     return df
@@ -565,50 +497,46 @@ def display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, nu
     
     curve_data = pd.DataFrame({
         "Year": years,
-        "Nominal Increase (including inflation)": [x * 100 for x in nominal_increases],
-        "Real Increase (above inflation)": [x * 100 for x in real_increases],
-        "Cumulative Cost (£ millions)": [cost / 1e6 for cost in actual_cumulative_costs],
+        "Nominal Increase": [x * 100 for x in nominal_increases],
+        "Real Increase": [x * 100 for x in real_increases],
+        "Cumulative Cost": [cost / 1e6 for cost in actual_cumulative_costs],
     })
     
-    fig_curve = make_subplots(specs=[[{"secondary_y": True}]])
+    fig = go.Figure()
 
-    fig_curve.add_trace(
-        go.Scatter(x=curve_data["Year"], y=curve_data['Nominal Increase (including inflation)'], name="Nominal Increase"),
-        secondary_y=False
+    fig.add_trace(
+        go.Scatter(x=curve_data["Year"], y=curve_data['Nominal Increase'], name="Nominal Increase",
+                   mode='lines+markers', line=dict(shape='spline', smoothing=1.3, color='rgb(0, 123, 255)'))
     )
-    fig_curve.add_trace(
-        go.Scatter(x=curve_data["Year"], y=curve_data['Real Increase (above inflation)'], name="Real Increase"),
-        secondary_y=False
+    fig.add_trace(
+        go.Scatter(x=curve_data["Year"], y=curve_data['Real Increase'], name="Real Increase",
+                   mode='lines+markers', line=dict(shape='spline', smoothing=1.3, color='rgb(135, 206, 250)'))
     )
-    fig_curve.add_trace(
-        go.Scatter(x=curve_data["Year"], y=curve_data['Cumulative Cost (£ millions)'], name="Cumulative Cost"),
-        secondary_y=True
+    fig.add_trace(
+        go.Scatter(x=curve_data["Year"], y=curve_data['Cumulative Cost'], name="Cumulative Cost",
+                   mode='lines+markers', line=dict(shape='spline', smoothing=1.3, color='rgb(255, 99, 71)'), yaxis="y2")
     )
 
-    fig_curve.update_layout(
+    fig.update_layout(
         title_text="Pay Increase Curve and Cumulative Cost",
         xaxis_title="Year",
-        legend=dict(x=0, y=1, traceorder="normal")
+        yaxis_title="Percentage Increase",
+        yaxis2=dict(title="Cumulative Cost (£ millions)", overlaying="y", side="right"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hovermode="x unified",
+        height=600,
     )
-    fig_curve.update_yaxes(title_text="Percentage Increase", secondary_y=False)
-    fig_curve.update_yaxes(title_text="Cumulative Cost (£ millions)", secondary_y=True)
 
-    st.plotly_chart(fig_curve, use_container_width=True)
-    st.caption("Note: Cumulative Cost is shown in millions of pounds")
-
-def will_fpr_be_achieved(results):
-    fpr_achieved = all(result["FPR Progress"][-1] >= 100 for result in results)
-    return fpr_achieved
-
+    st.plotly_chart(fig, use_container_width=True)
+    
 def display_fpr_achievement(results):
-    st.divider()
-    st.subheader("Will FPR be achieved from this pay deal?")
+    st.subheader(":blue-background[Will FPR be achieved from this pay deal?]")
     fpr_achieved = all(result["FPR Progress"][-1] >= 100 for result in results)
     
     if fpr_achieved:
         st.success("Yes, FPR will be achieved for all nodal points.")
     else:
-        st.error("No, FPR will not be achieved for all nodal points.")
+        st.error("No, FPR will not be achieved for all nodal points.  \nThese are the residual pay erosion values in %.")
     
     # Display detailed FPR progress for each nodal point using st.metric
     cols = st.columns(len(results))
@@ -630,27 +558,36 @@ def display_fpr_achievement(results):
                 delta_color="normal"  # This ensures the delta is green for positive values
             )
     st.divider()
+
 def main():
-    st.title("Doctor Pay Model with Dynamic FPR Calculation")
+    # Custom CSS to set sidebar width to maximum
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"][aria-expanded="true"] > div:first-child {
+            width: 500px;
+        }
+        [data-testid="stSidebar"][aria-expanded="false"] > div:first-child {
+            width: 500px;
+            margin-left: -500px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    inflation_type, fpr_start_year, fpr_end_year, num_years, fpr_percentages = setup_sidebar()
-    
-    # Ensure FPR targets are calculated
-    if not fpr_percentages:
-        update_fpr_targets()
-        fpr_percentages = st.session_state.fpr_targets
+    st.title("DoctorsVote MYPD-FPR Modeller")
+    st.write("Adjust settings in the sidebar.")
 
-    doctor_counts = setup_doctor_counts()
-    year_inputs = setup_year_inputs(num_years, inflation_type)
+    inflation_type, fpr_start_year, fpr_end_year, num_years, fpr_percentages, doctor_counts, year_inputs = setup_sidebar()
 
     results, total_nominal_cost, total_real_cost, cumulative_costs = calculate_results(
         fpr_percentages, doctor_counts, year_inputs, inflation_type
     )
 
-    display_fpr_achievement(results)  # Add this line
-    display_results(results, total_nominal_cost, total_real_cost, year_inputs)
+    display_fpr_achievement(results)
     display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years)
-
+    display_results(results, total_nominal_cost, total_real_cost, year_inputs)
 
 if __name__ == "__main__":
     main()
