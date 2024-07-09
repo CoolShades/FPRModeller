@@ -117,7 +117,7 @@ def update_end_year_options():
 def setup_sidebar():
     initialize_session_state()
     
-    st.sidebar.title("Modeller Settings")
+    st.sidebar.title("Modeller Settings ⚙️")
     
     inflation_type = st.sidebar.radio("Select inflation measure:", ("RPI", "CPI"), key="inflation_type", on_change=update_fpr_targets, horizontal=True)
     
@@ -480,26 +480,30 @@ def display_results(results, total_nominal_cost, total_real_cost, year_inputs):
     
 def display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years):
     st.subheader("Pay Progression & FPR Progress Visualisation")
-    selected_nodal_point = st.selectbox("Select Nodal Point", [result["Nodal Point"] for result in results], key="nodal_point_selector")
-    selected_data = next(item for item in results if item["Nodal Point"] == selected_nodal_point)
 
-    fig = create_pay_progression_chart(selected_data, num_years)
-    st.plotly_chart(fig, use_container_width=True)
+    # Create tabs for each nodal point
+    nodal_tabs = st.tabs([result["Nodal Point"] for result in results])
 
-    st.write(f"FPR progress and Pay Erosion for {selected_nodal_point}:")
-    progress_df = create_fpr_progress_table(selected_data, num_years, year_inputs)
-    st.table(progress_df)
+    for tab, result in zip(nodal_tabs, results):
+        with tab:
+            fig = create_pay_progression_chart(result, num_years)
+            st.plotly_chart(fig, use_container_width=True)
 
-    display_pay_increase_curve(selected_data, year_inputs, cumulative_costs, inflation_type, num_years)
+            st.write(f"FPR progress and Pay Erosion for {result['Nodal Point']}:")
+            progress_df = create_fpr_progress_table(result, num_years, year_inputs)
+            st.table(progress_df)
 
-def create_pay_progression_chart(selected_data, num_years):
+            display_pay_increase_curve(result, year_inputs, cumulative_costs, inflation_type, num_years)
+            
+def create_pay_progression_chart(result, num_years):
     years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]
-    nominal_pay = selected_data["Pay Progression Nominal"]
-    baseline_pay = selected_data["Base Pay"]
+    nominal_pay = result["Pay Progression Nominal"]
+    baseline_pay = result["Base Pay"]
     pay_increase = [max(0, pay - baseline_pay) for pay in nominal_pay]
     percent_increase = [(increase / baseline_pay) * 100 for increase in pay_increase]
-    pay_erosion = [-(x) * 100 for x in selected_data["Real Terms Pay Cuts"]]
-    fpr_progress = selected_data["FPR Progress"]
+    pay_erosion = [-(x) * 100 for x in result["Real Terms Pay Cuts"]]
+    fpr_progress = result["FPR Progress"]
+
 
     fig = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -526,7 +530,7 @@ def create_pay_progression_chart(selected_data, num_years):
     )
 
     fig.update_layout(
-        title=f"Pay Progression, FPR Progress, and Pay Erosion for {selected_data['Nodal Point']}",
+        title=f"Pay Progression, FPR Progress, and Pay Erosion for {result['Nodal Point']}",
         xaxis_title="Year",
         yaxis_title="Pay (£)",
         yaxis2_title="Percentage (%)",
@@ -622,13 +626,13 @@ def display_pay_increase_curve(selected_data, year_inputs, cumulative_costs, inf
     st.plotly_chart(fig, use_container_width=True)
     
 def display_fpr_achievement(results):
-    st.subheader(":blue-background[Will FPR be achieved from this pay deal?]")
+    st.subheader(":blue-background[👈 Will FPR be achieved from this pay deal? 🕵️]")
     fpr_achieved = all(result["FPR Progress"][-1] >= 100 for result in results)
     
     if fpr_achieved:
         st.success("Yes, FPR will be achieved for all nodal points.")
     else:
-        st.error("No, FPR will not be achieved for all nodal points.  \nThese are the residual pay erosion values in %.")
+        st.error("No, FPR will not be achieved for all nodal points. But some progress has been made...  \nNote the residual pay erosion figures in % below.")
     
     # Display detailed FPR progress for each nodal point using st.metric
     cols = st.columns(len(results))
