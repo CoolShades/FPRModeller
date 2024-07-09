@@ -90,6 +90,12 @@ def initialize_session_state():
         st.session_state.end_year_options = AVAILABLE_YEARS[1:]
     if 'fpr_targets' not in st.session_state:
         st.session_state.fpr_targets = {}
+    if 'global_inflation' not in st.session_state:
+        st.session_state.global_inflation = 2.0
+    if 'global_pay_rise' not in st.session_state:
+        st.session_state.global_pay_rise = 5.0
+    if 'num_years' not in st.session_state:
+        st.session_state.num_years = 5  # Default to 5 years
     
     # Calculate initial FPR targets
     update_fpr_targets()
@@ -133,18 +139,14 @@ def setup_sidebar():
             on_change=update_fpr_targets
         )
     with col3:
-        num_years = st.number_input("Number of Years", min_value=0, max_value=10, value=5)
+        num_years = st.number_input("Number of Years", min_value=0, max_value=10, value=st.session_state.num_years, key="num_years")
     
-    # Ensure FPR targets are calculated
-    if not st.session_state.fpr_targets:
-        update_fpr_targets()
-    
-    # Display FPR targets as a single line of text
+    # Display FPR targets
     fpr_text = "FPR Targets: "
     fpr_values = ", ".join([f"N{i+1}: {value:.1f}%" for i, value in enumerate(st.session_state.fpr_targets.values())])
-    st.sidebar.write(f":red{fpr_text}{fpr_values}")
+    st.sidebar.write(f":blue[{fpr_text}**{fpr_values}**]")
     
-    # Move doctor counts setup to sidebar with columns
+    # Setup doctor counts
     st.sidebar.subheader("Number of Doctors in Each Nodal Point")
     cols = st.sidebar.columns(5)
     doctor_counts = {}
@@ -156,71 +158,138 @@ def setup_sidebar():
     # Store doctor_counts in session state
     st.session_state.doctor_counts = doctor_counts
     
-    # Move year inputs setup to sidebar
-    year_inputs = setup_year_inputs_sidebar(num_years, inflation_type)
+    # Add global controls
+    # Add global controls
+    st.sidebar.subheader("Global Settings for Future Years")
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        global_inflation = st.number_input("Global Inflation Rate (%)", min_value=0.0, max_value=20.0, value=st.session_state.global_inflation, step=0.1, key="global_inflation", on_change=update_global_settings)
+    with col2:
+        global_pay_rise = st.number_input("Global Pay Rise (%)", min_value=0.0, max_value=20.0, value=st.session_state.global_pay_rise, step=0.1, key="global_pay_rise", on_change=update_global_settings)
     
-    return inflation_type, fpr_start_year, fpr_end_year, num_years, st.session_state.fpr_targets, doctor_counts, year_inputs
+    # Check for individual changes and display warning if necessary
+    if check_individual_changes():
+        st.sidebar.warning("Individual year changes detected. Global settings are disabled.")
+    
+    # Add subheader for individual year settings
+    st.sidebar.subheader("Settings for Individual Years")
+    
+    # Setup year inputs
+    year_inputs = setup_year_inputs_sidebar(st.session_state.num_years, inflation_type)
+    
+    return inflation_type, fpr_start_year, fpr_end_year, num_years, st.session_state.fpr_targets, st.session_state.doctor_counts, year_inputs
+
+def update_global_settings():
+    for year in range(1, st.session_state.num_years + 1):
+        st.session_state[f"inflation_{year}"] = st.session_state.global_inflation
+        for name, _, _ in NODAL_POINTS:
+            st.session_state[f"mypd_nodal_percentage_{name}_{year}"] = st.session_state.global_pay_rise
+
+def check_individual_changes():
+    for year in range(1, st.session_state.num_years + 1):
+        if f"inflation_{year}" in st.session_state and st.session_state[f"inflation_{year}"] != st.session_state.global_inflation:
+            return True
+        for name, _, _ in NODAL_POINTS:
+            if f"mypd_nodal_percentage_{name}_{year}" in st.session_state and st.session_state[f"mypd_nodal_percentage_{name}_{year}"] != st.session_state.global_pay_rise:
+                return True
+    return False
 
 def setup_year_inputs_sidebar(num_years, inflation_type):
     year_inputs = []
 
     # Initialize session state for all years
-    for year in range(num_years + 1):  # +1 to include year 0
+    for year in range(num_years + 1):
         if f"nodal_percentages_{year}" not in st.session_state:
-            st.session_state[f"nodal_percentages_{year}"] = {name: 0.0 if year == 0 else 7.0 for name, _, _ in NODAL_POINTS}
+            st.session_state[f"nodal_percentages_{year}"] = {name: 0.0 if year == 0 else st.session_state.global_pay_rise for name, _, _ in NODAL_POINTS}
         if f"pound_increases_{year}" not in st.session_state:
             st.session_state[f"pound_increases_{year}"] = {name: 0 for name, _, _ in NODAL_POINTS}
+        if f"inflation_{year}" not in st.session_state:
+            st.session_state[f"inflation_{year}"] = 0.033 if year == 0 else st.session_state.global_inflation
 
-    for year in range(num_years + 1):  # +1 to include year 0
-        with st.sidebar.expander(f"Year {year} ({2023+year}/{2024+year})"):
-            year_input = {
-                "nodal_percentages": {},
-                "pound_increases": {},
-                "inflation": 0.0
-            }
-            
-            st.write("Consolidated pay offer:")
-            cols = st.columns(5)
-            for i, (name, _, _) in enumerate(NODAL_POINTS):
-                with cols[i]:
-                    year_input["pound_increases"][name] = st.number_input(
-                        f"{name}",
-                        min_value=0,
-                        max_value=10000,
-                        value=st.session_state[f"pound_increases_{year}"][name],
-                        step=100,
-                        key=f"pound_increase_{name}_{year}"
-                    )
-            
-            st.write("Percentage pay rise:")
-            cols = st.columns(5)
-            for i, (name, _, _) in enumerate(NODAL_POINTS):
-                with cols[i]:
-                    year_input["nodal_percentages"][name] = st.number_input(
-                        f"{name} (%)",
+    for year in range(num_years + 1):
+        if year == 0:
+            with st.sidebar.expander("Additional Offer for 2023/2024 (not part of MYPD)"):
+                st.info("This section is for any additional offer for 2023/2024. It is not part of the Multi-Year Pay Deal and is shown separately to avoid confusion.")
+                
+                year_input = {
+                    "nodal_percentages": {},
+                    "pound_increases": {},
+                    "inflation": 0.033 if inflation_type == "RPI" else 0.023
+                }
+                
+                st.write("Consolidated pay offer:")
+                cols = st.columns(5)
+                for i, (name, _, _) in enumerate(NODAL_POINTS):
+                    with cols[i]:
+                        year_input["pound_increases"][name] = st.number_input(
+                            f"{name}",
+                            min_value=0,
+                            max_value=10000,
+                            value=st.session_state[f"pound_increases_{year}"][name],
+                            step=100,
+                            key=f"additional_offer_pound_increase_{name}"
+                        )
+                
+                st.write(f"Inflation for 2023/2024: {year_input['inflation']*100:.1f}%")
+                
+                st.write("Percentage pay rise:")
+                cols = st.columns(5)
+                for i, (name, _, _) in enumerate(NODAL_POINTS):
+                    with cols[i]:
+                        year_input["nodal_percentages"][name] = st.number_input(
+                            f"{name} (%)",
+                            min_value=0.0,
+                            max_value=20.0,
+                            value=st.session_state[f"nodal_percentages_{year}"][name],
+                            step=0.1,
+                            format="%.1f",
+                            key=f"additional_offer_nodal_percentage_{name}"
+                        ) / 100
+        else:
+            with st.sidebar.expander(f"Year {year} ({2023+year}/{2024+year})"):
+                year_input = {
+                    "nodal_percentages": {},
+                    "pound_increases": {},
+                    "inflation": st.slider(
+                        f"Projected Inflation for Year {year} ({2023+year}/{2024+year}) (%)",
                         min_value=0.0,
-                        max_value=20.0,
-                        value=st.session_state[f"nodal_percentages_{year}"][name],
+                        max_value=10.0,
+                        value=st.session_state[f"inflation_{year}"],
                         step=0.1,
-                        format="%.1f",
-                        key=f"nodal_percentage_{name}_{year}"
+                        key=f"inflation_{year}",
+                        on_change=check_individual_changes
                     ) / 100
-            
-            if year == 0:
-                # Set fixed inflation rate for year 0
-                year_input["inflation"] = 0.033 if inflation_type == "RPI" else 0.023
-                st.write(f"Inflation for Year 0 (2023/2024): {year_input['inflation']*100:.1f}%")
-            else:
-                year_input["inflation"] = st.slider(
-                    f"Projected Inflation for Year {year} ({2023+year}/{2024+year}) (%)",
-                    min_value=0.0,
-                    max_value=10.0,
-                    value=2.0,
-                    step=0.1,
-                    key=f"inflation_{year}"
-                ) / 100
-            
-            year_inputs.append(year_input)
+                }
+                
+                st.write("Consolidated pay offer:")
+                cols = st.columns(5)
+                for i, (name, _, _) in enumerate(NODAL_POINTS):
+                    with cols[i]:
+                        year_input["pound_increases"][name] = st.number_input(
+                            f"{name}",
+                            min_value=0,
+                            max_value=10000,
+                            value=st.session_state[f"pound_increases_{year}"][name],
+                            step=100,
+                            key=f"mypd_pound_increase_{name}_{year}"
+                        )
+                
+                st.write("Percentage pay rise above inflation:")
+                cols = st.columns(5)
+                for i, (name, _, _) in enumerate(NODAL_POINTS):
+                    with cols[i]:
+                        year_input["nodal_percentages"][name] = st.number_input(
+                            f"{name} (%)",
+                            min_value=0.0,
+                            max_value=20.0,
+                            value=st.session_state[f"nodal_percentages_{year}"][name],
+                            step=0.1,
+                            format="%.1f",
+                            key=f"mypd_nodal_percentage_{name}_{year}",
+                            on_change=check_individual_changes
+                        ) / 100
+        
+        year_inputs.append(year_input)
 
     return year_inputs
 
@@ -252,7 +321,7 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
 
     for year, year_input in enumerate(year_inputs):
         if year == 0:
-            # Year 0 (2023/2024) calculations
+            # Year 0 (2023/2024) calculations - keep existing behavior
             consolidated_increase = year_input["pound_increases"][name]
             percentage_increase = year_input["nodal_percentages"][name]
             total_pay_rise = ((post_ddrb_pay - base_pay) / base_pay) + percentage_increase + (consolidated_increase / base_pay)
@@ -262,9 +331,9 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
             additional_pay_increase = new_nominal_pay - post_ddrb_pay
             basic_pay_cost = additional_pay_increase * doctor_count
         else:
-            # Subsequent years
+            # Subsequent years - implement new approach
             consolidated_increase = year_input["pound_increases"][name]
-            percentage_increase = year_input["nodal_percentages"][name]
+            percentage_increase = year_input["nodal_percentages"][name] + year_input["inflation"]
             total_pay_rise = percentage_increase + (consolidated_increase / pay_progression_nominal[-1])
             new_nominal_pay = pay_progression_nominal[-1] * (1 + percentage_increase) + consolidated_increase
             
@@ -377,6 +446,36 @@ def display_results(results, total_nominal_cost, total_real_cost, year_inputs):
     
     st.write("All Calculation Summary Table")
     df_results = pd.DataFrame(results)
+    
+    # Function to round and format numbers for display
+    def round_and_format(x):
+        if isinstance(x, (int, float)):
+            return f"{x:.2f}"
+        elif isinstance(x, list):
+            return [f"{val:.2f}" for val in x]
+        else:
+            return x
+
+    # Apply rounding to all columns except 'Nodal Point'
+    for col in df_results.columns:
+        if col != 'Nodal Point':
+            df_results[col] = df_results[col].apply(round_and_format)
+    
+    # Format currency columns
+    currency_columns = ['Base Pay', 'Final Pay', 'FPR Target', 'Nominal Total Increase', 'Real Total Increase']
+    for col in currency_columns:
+        df_results[col] = df_results[col].apply(lambda x: f"£{float(x):,.2f}")
+    
+    # Format percentage columns
+    percentage_columns = ['FPR Required (%)', 'Nominal Percent Increase', 'Real Percent Increase']
+    for col in percentage_columns:
+        df_results[col] = df_results[col].apply(lambda x: f"{float(x):.2f}%")
+    
+    # Special handling for 'Real Terms Pay Cuts' and 'FPR Progress' columns
+    list_columns = ['Real Terms Pay Cuts', 'FPR Progress']
+    for col in list_columns:
+        df_results[col] = df_results[col].apply(lambda x: [f"{float(val):.2f}%" for val in x])
+    
     st.dataframe(df_results)
     
 def display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years):
