@@ -653,18 +653,16 @@ def display_fpr_achievement(results):
 
 def main():
     # Custom CSS to set sidebar width and improve layout
-    def main():
-    # Inject custom CSS to set the width of the sidebar
-        st.markdown(
-        """
-        <style>
-        section[data-testid="stSidebar"] {
-            width: 500px !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-        )  
+    st.markdown(
+    """
+    <style>
+    section[data-testid="stSidebar"] {
+        width: 500px !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+    )  
 
     st.title("DoctorsVote MYPD-FPR Modeller")
     st.write("This app is best used on a desktop/laptop. Adjust settings in the sidebar.")
