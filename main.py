@@ -657,7 +657,7 @@ def main():
     """
     <style>
     section[data-testid="stSidebar"] {
-        width: 500px !important;
+        width: 600px !important;
     }
     </style>
     """,
