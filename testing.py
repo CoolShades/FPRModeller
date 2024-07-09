@@ -391,7 +391,7 @@ def display_visualizations(results, cumulative_costs, year_inputs, inflation_typ
     progress_df = create_fpr_progress_table(selected_data, num_years, year_inputs)
     st.table(progress_df)
 
-    display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, num_years)
+    display_pay_increase_curve(selected_data, year_inputs, cumulative_costs, inflation_type, num_years)
 
 def create_pay_progression_chart(selected_data, num_years):
     years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]
@@ -474,31 +474,24 @@ def create_fpr_progress_table(selected_data, num_years, year_inputs):
 
     return df
 
-def display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, num_years):
-    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]  # +1 to include Year 0
+def display_pay_increase_curve(selected_data, year_inputs, cumulative_costs, inflation_type, num_years):
+    years = [f"Year {i} ({2023+i}/{2024+i})" for i in range(num_years + 1)]
     
-    nominal_increases = [0]  # Start with 0 for Year 0
-    nominal_increases += [
-        sum(year_input["nodal_percentages"].values()) / len(year_input["nodal_percentages"])
-        for year_input in year_inputs
-    ]
-    nominal_increases = nominal_increases[:num_years + 1]  # Limit to selected number of years
+    nominal_increases = selected_data["Net Change in Pay"]
+    real_increases = []
     
-    inflation_rates = [0.033 if inflation_type == "RPI" else 0.023]  # Base year inflation
-    inflation_rates += [year_input.get("inflation", inflation_rates[0]) for year_input in year_inputs]
-    inflation_rates = inflation_rates[:num_years + 1]  # Limit to selected number of years
+    for year, year_input in enumerate(year_inputs[:num_years + 1]):
+        inflation = year_input["inflation"] * 100
+        real_increase = nominal_increases[year] - inflation
+        real_increases.append(real_increase)
     
-    real_increases = [nominal_increases[i] - inflation_rates[i] for i in range(len(nominal_increases))]
-    
-    cumulative_costs = cumulative_costs[:num_years + 1]  # Limit to selected number of years
-    
-    # Calculate the actual cumulative costs
+    cumulative_costs = cumulative_costs[:num_years + 1]
     actual_cumulative_costs = [sum(cumulative_costs[:i+1]) for i in range(len(cumulative_costs))]
     
     curve_data = pd.DataFrame({
         "Year": years,
-        "Nominal Increase": [x * 100 for x in nominal_increases],
-        "Real Increase": [x * 100 for x in real_increases],
+        "Nominal Increase": nominal_increases,
+        "Real Increase": real_increases,
         "Cumulative Cost": [cost / 1e6 for cost in actual_cumulative_costs],
     })
     
@@ -518,7 +511,7 @@ def display_pay_increase_curve(year_inputs, cumulative_costs, inflation_type, nu
     )
 
     fig.update_layout(
-        title_text="Pay Increase Curve and Cumulative Cost",
+        title_text=f"Pay Increase Curve and Cumulative Cost for {selected_data['Nodal Point']}",
         xaxis_title="Year",
         yaxis_title="Percentage Increase",
         yaxis2=dict(title="Cumulative Cost (£ millions)", overlaying="y", side="right"),
@@ -577,7 +570,78 @@ def main():
     )
 
     st.title("DoctorsVote MYPD-FPR Modeller")
-    st.write("Adjust settings in the sidebar.")
+    st.write("This app is best used on a desktop/laptop. Adjust settings in the sidebar.")
+    # Add the introduction and explanations
+    with st.expander("About This App", expanded=False):
+        st.markdown("""
+        ## Introduction
+
+        Welcome to the DoctorsVote Multi-Year Pay Deal (MYPD) and Full Pay Restoration (FPR) Modeller. This sophisticated tool is designed to help medical professionals, union representatives, and policymakers understand and visualize the complex interplay between pay deals, inflation, and the goal of full pay restoration for doctors in the UK.
+
+        The modeller allows you to:
+
+        1. Input and adjust parameters for multi-year pay deals
+        2. Visualize the progression of pay and its relation to inflation over time
+        3. Track the progress towards Full Pay Restoration (FPR) for different nodal points
+        4. Calculate and display the costs associated with proposed pay deals
+
+        ## How It Works
+
+        ### Sidebar Controls
+
+        The sidebar on the left contains all the input controls for the model:
+
+        1. **Inflation Measure**: Choose between RPI (Retail Price Index) and CPI (Consumer Price Index) as the basis for calculations.
+        2. **FPR Start and End Years**: Select the range of years over which to calculate the Full Pay Restoration target.
+        3. **Number of Years**: Set the duration of the pay deal you want to model.
+        4. **Doctor Counts**: Input the number of doctors at each nodal point for accurate cost calculations.
+        5. **Year-by-Year Inputs**: For each year of the deal, you can set:
+           - Consolidated pay offers (in pounds)
+           - Percentage pay rises
+           - Projected inflation rates
+
+        ### Main Display
+
+        The main area of the app displays the results of your inputs:
+
+        1. **FPR Achievement**: A summary of whether the proposed deal achieves Full Pay Restoration, with a breakdown by nodal point.
+        2. **Pay Progression & FPR Progress Visualization**: Interactive charts showing:
+           - Nominal and real pay progression
+           - FPR progress over time
+           - Pay erosion due to inflation
+        3. **Pay Increase Curve**: A chart displaying nominal increases, real increases, and cumulative costs over the years of the deal.
+        4. **Cost Breakdown**: Detailed yearly costs, including basic pay, pension contributions, and additional hours.
+        5. **Full Results Table**: A comprehensive table with all calculated metrics for each nodal point.
+
+        ## Key Concepts
+
+        ### Full Pay Restoration (FPR)
+
+        FPR represents the goal of restoring doctors' pay to what it would have been if it had kept pace with inflation since a chosen baseline year. The FPR target is calculated based on the cumulative effect of inflation between the start and end years you select.
+
+        ### Pay Erosion
+
+        Pay erosion occurs when pay increases fail to keep up with inflation, resulting in a decrease in real-terms pay. The modeller calculates and displays pay erosion as a percentage, showing how much the value of pay has decreased relative to inflation.
+
+        ### Nodal Points
+
+        The model uses five nodal points representing different stages in a doctor's career. Each nodal point has its own base pay and progression, allowing for a nuanced view of how pay deals affect doctors at different career stages.
+
+        ### Real vs Nominal Increases
+
+        - **Nominal Increases**: The actual percentage or pound value increase in pay.
+        - **Real Increases**: The increase in pay after accounting for inflation, representing the true change in purchasing power.
+
+        ## Using the Model
+
+        1. Start by setting your desired parameters in the sidebar.
+        2. Observe the "FPR Achievement" section to see if the proposed deal meets the FPR targets.
+        3. Use the visualizations to understand how pay progresses over time and how it compares to inflation.
+        4. Examine the cost breakdown to understand the financial implications of the proposed deal.
+        5. Adjust your inputs and observe how changes affect the outcomes.
+
+        This model is a powerful tool for understanding the long-term implications of pay deals and their progress towards restoring doctors' pay. By providing a clear, data-driven view of complex pay scenarios, it aims to facilitate informed discussions and decision-making in pay negotiations.
+        """)
 
     inflation_type, fpr_start_year, fpr_end_year, num_years, fpr_percentages, doctor_counts, year_inputs = setup_sidebar()
 
