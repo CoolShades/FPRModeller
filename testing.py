@@ -21,7 +21,7 @@ AVAILABLE_YEARS = [
     "2023/2024"
 ]
 
-def generate_detailed_report(results, year_inputs, doctor_counts):
+def generate_detailed_report(results, year_inputs, doctor_counts, additional_hours, out_of_hours):
     report = io.StringIO()
     with redirect_stdout(report):
         for result in results:
@@ -39,8 +39,8 @@ def generate_detailed_report(results, year_inputs, doctor_counts):
 
                 def calculate_pay_breakdown(pay):
                     basic = pay
-                    additional = (basic / 40) * 8
-                    ooh = additional * 0.37
+                    additional = (basic / 40) * additional_hours
+                    ooh = (basic / 40) * out_of_hours * 0.37
                     total = basic + additional + ooh
                     pension = calculate_pension_contribution(basic)
                     taxable = total - pension
@@ -53,8 +53,8 @@ def generate_detailed_report(results, year_inputs, doctor_counts):
                 
                 print(f"Current Year Pay Breakdown:")
                 print(f"  Basic Pay: £{current_basic:.2f}")
-                print(f"  Additional Hours: £{current_additional:.2f} = (£{current_basic:.2f} / 40) * 8")
-                print(f"  On-Call Hours: £{current_ooh:.2f} = £{current_additional:.2f} * 0.37")
+                print(f"  Additional Hours: £{current_additional:.2f} = (£{current_basic:.2f} / 40) * {additional_hours}")
+                print(f"  On-Call Hours: £{current_ooh:.2f} = (£{current_basic:.2f} / 40) * {out_of_hours} * 0.37")
                 print(f"  Total Pay: £{current_total:.2f} = £{current_basic:.2f} + £{current_additional:.2f} + £{current_ooh:.2f}")
                 print(f"  Pension Contribution: £{current_pension:.2f}")
                 print(f"  Taxable Pay: £{current_taxable:.2f} = £{current_total:.2f} - £{current_pension:.2f}")
@@ -66,8 +66,8 @@ def generate_detailed_report(results, year_inputs, doctor_counts):
                     post_ddrb_basic, post_ddrb_additional, post_ddrb_ooh, post_ddrb_total, post_ddrb_pension, post_ddrb_taxable, post_ddrb_income_tax, post_ddrb_ni, post_ddrb_employer_ni = calculate_pay_breakdown(post_ddrb_pay)
                     print(f"\nPost-DDRB Pay Breakdown:")
                     print(f"  Basic Pay: £{post_ddrb_basic:.2f}")
-                    print(f"  Additional Hours: £{post_ddrb_additional:.2f} = (£{post_ddrb_basic:.2f} / 40) * 8")
-                    print(f"  On-Call Hours: £{post_ddrb_ooh:.2f} = £{post_ddrb_additional:.2f} * 0.37")
+                    print(f"  Additional Hours: £{post_ddrb_additional:.2f} = (£{post_ddrb_basic:.2f} / 40) * {additional_hours}")
+                    print(f"  On-Call Hours: £{post_ddrb_ooh:.2f} = (£{post_ddrb_basic:.2f} / 40) * {out_of_hours} * 0.37")
                     print(f"  Total Pay: £{post_ddrb_total:.2f} = £{post_ddrb_basic:.2f} + £{post_ddrb_additional:.2f} + £{post_ddrb_ooh:.2f}")
                     print(f"  Pension Contribution: £{post_ddrb_pension:.2f}")
                     print(f"  Taxable Pay: £{post_ddrb_taxable:.2f} = £{post_ddrb_total:.2f} - £{post_ddrb_pension:.2f}")
@@ -85,8 +85,8 @@ def generate_detailed_report(results, year_inputs, doctor_counts):
                     prev_basic, prev_additional, prev_ooh, prev_total, prev_pension, prev_taxable, prev_income_tax, prev_ni, prev_employer_ni = calculate_pay_breakdown(prev_pay)
                     print(f"\nPrevious Year Pay Breakdown:")
                     print(f"  Basic Pay: £{prev_basic:.2f}")
-                    print(f"  Additional Hours: £{prev_additional:.2f} = (£{prev_basic:.2f} / 40) * 8")
-                    print(f"  On-Call Hours: £{prev_ooh:.2f} = £{prev_additional:.2f} * 0.37")
+                    print(f"  Additional Hours: £{prev_additional:.2f} = (£{prev_basic:.2f} / 40) * {additional_hours}")
+                    print(f"  On-Call Hours: £{prev_ooh:.2f} = (£{prev_basic:.2f} / 40) * {out_of_hours} * 0.37")
                     print(f"  Total Pay: £{prev_total:.2f} = £{prev_basic:.2f} + £{prev_additional:.2f} + £{prev_ooh:.2f}")
                     print(f"  Pension Contribution: £{prev_pension:.2f}")
                     print(f"  Taxable Pay: £{prev_taxable:.2f} = £{prev_total:.2f} - £{prev_pension:.2f}")
@@ -243,6 +243,10 @@ def initialize_session_state():
         st.session_state.global_pay_rise = 5.0
     if 'num_years' not in st.session_state:
         st.session_state.num_years = 5  # Default to 5 years
+    if 'additional_hours' not in st.session_state:
+        st.session_state.additional_hours = 8  # Default to 8 hours
+    if 'out_of_hours' not in st.session_state:
+        st.session_state.out_of_hours = 8  # Default to 8 hours
     
     # Calculate initial FPR targets
     update_fpr_targets()
@@ -317,6 +321,13 @@ def setup_sidebar():
     with col2:
         global_pay_rise = st.number_input("Global Pay Rise (%)", min_value=0.0, max_value=40.0, value=st.session_state.global_pay_rise, step=0.1, key="global_pay_rise", on_change=update_global_settings)
     
+    # Add inputs for additional hours and out-of-hours hours
+    col1, col2 = st.sidebar.columns(2)
+    with col1:
+        additional_hours = st.number_input("Additional Hours Assumption", min_value=0, max_value=24, value=st.session_state.additional_hours, step=1, key="additional_hours")
+    with col2:
+        out_of_hours = st.number_input("Out of Hours Assumption", min_value=0, max_value=24, value=st.session_state.out_of_hours, step=1, key="out_of_hours")
+    
     # Store doctor_counts in session state
     st.session_state.doctor_counts = doctor_counts
     
@@ -330,7 +341,7 @@ def setup_sidebar():
     # Setup year inputs
     year_inputs = setup_year_inputs_sidebar(st.session_state.num_years, inflation_type)
     
-    return inflation_type, fpr_start_year, fpr_end_year, num_years, st.session_state.fpr_targets, st.session_state.doctor_counts, year_inputs
+    return inflation_type, fpr_start_year, fpr_end_year, num_years, st.session_state.fpr_targets, st.session_state.doctor_counts, year_inputs, additional_hours, out_of_hours
 
 def update_global_settings():
     for year in range(1, st.session_state.num_years + 1):
@@ -446,14 +457,14 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
 
     return year_inputs
 
-def calculate_results(fpr_percentages, doctor_counts, year_inputs, inflation_type):
+def calculate_results(fpr_percentages, doctor_counts, year_inputs, inflation_type, additional_hours, out_of_hours):
     results = []
     total_nominal_cost = 0
     total_real_cost = 0
     cumulative_costs = [0] * (len(year_inputs) + 1)
 
     for name, base_pay, post_ddrb_pay in NODAL_POINTS:
-        result = calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentages[name], doctor_counts[name], year_inputs, inflation_type)
+        result = calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentages[name], doctor_counts[name], year_inputs, inflation_type, additional_hours, out_of_hours)
         results.append(result)
         total_nominal_cost += result["Total Nominal Cost"]
         total_real_cost += result["Total Real Cost"]
@@ -506,7 +517,8 @@ def calculate_fpr_and_erosion(base_pay, pay_progression_nominal, pay_progression
 
     return real_terms_pay_cuts[1:], fpr_progress[1:]
 
-def calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, post_ddrb_pay):
+# Update the calculate_costs function to use the new additional_hours and out_of_hours parameters
+def calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, post_ddrb_pay, additional_hours, out_of_hours):
     yearly_basic_costs = []
     yearly_total_costs = []
     yearly_tax_recouped = []
@@ -515,9 +527,9 @@ def calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, po
     yearly_pension_costs = []
 
     def calculate_total_pay(basic_pay):
-        additional_hours = (basic_pay / 40) * 8
-        ooh_hours = additional_hours * 0.37
-        return basic_pay, additional_hours, ooh_hours
+        additional_pay = (basic_pay / 40) * additional_hours
+        ooh_pay = (basic_pay / 40) * out_of_hours * 0.37
+        return basic_pay, additional_pay, ooh_pay
 
     def calculate_tax(total_pay, basic_pay):
         pension_contribution = calculate_pension_contribution(basic_pay)
@@ -575,11 +587,11 @@ def calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, po
     return yearly_basic_costs, yearly_total_costs, yearly_tax_recouped, yearly_net_costs, yearly_employer_ni_costs, yearly_pension_costs
 
 
-def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage, doctor_count, year_inputs, inflation_type):
+def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage, doctor_count, year_inputs, inflation_type, additional_hours, out_of_hours):
     pay_progression_nominal, pay_progression_real, net_change_in_pay = calculate_pay_progression(base_pay, post_ddrb_pay, year_inputs, name)
     real_terms_pay_cuts, fpr_progress = calculate_fpr_and_erosion(base_pay, pay_progression_nominal, pay_progression_real, fpr_percentage, year_inputs)
     
-    yearly_basic_costs, yearly_total_costs, yearly_tax_recouped, yearly_net_costs, yearly_employer_ni_costs, yearly_pension_costs = calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, post_ddrb_pay)
+    yearly_basic_costs, yearly_total_costs, yearly_tax_recouped, yearly_net_costs, yearly_employer_ni_costs, yearly_pension_costs = calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, post_ddrb_pay, additional_hours, out_of_hours)
 
     return {
         "Nodal Point": name,
@@ -608,7 +620,7 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
     }
     
 # Modify the display_cost_breakdown function
-def display_cost_breakdown(results, year_inputs):
+def display_cost_breakdown(results, year_inputs, additional_hours, out_of_hours):
     st.subheader("Cost Breakdown by Year")
     
     num_years = len(year_inputs)
@@ -629,9 +641,9 @@ def display_cost_breakdown(results, year_inputs):
                     total_cost = result["Yearly Total Costs"][year]
                     employer_ni_cost = result["Yearly Employer NI Costs"][year]
                     basic_pay_cost = result["Yearly Basic Costs"][year]
-                    pension_cost = basic_pay_cost * 0.237
-                    additional_hours = (basic_pay_cost / 40) * 8
-                    ooh_component = additional_hours * 0.37
+                    pension_cost = result["Yearly Pension Costs"][year]
+                    additional_hours_cost = (basic_pay_cost / 40) * additional_hours
+                    ooh_cost = (basic_pay_cost / 40) * out_of_hours * 0.37
                     tax_recouped = result["Yearly Tax Recouped"][year]
                     net_cost = result["Yearly Net Costs"][year]
                     
@@ -643,8 +655,8 @@ def display_cost_breakdown(results, year_inputs):
                         "Nodal Point": result["Nodal Point"],
                         "Basic Pay Costs": basic_pay_cost,
                         "Pension Costs": pension_cost,
-                        "Additional Hours Costs (Assuming 8 Hours)": additional_hours,
-                        "OOH Costs (Assuming 8 Hours)": ooh_component,
+                        "Additional Hours Costs": additional_hours_cost,
+                        "OOH Costs": ooh_cost,
                         "Employer NI Costs": employer_ni_cost,
                         "Total Costs": total_cost,
                         "Tax Recouped": tax_recouped,
@@ -678,10 +690,10 @@ def display_cost_breakdown(results, year_inputs):
                   delta=f"Total Tax Recouped: £{cumulative_tax_recouped:,.2f}")
     st.divider()
     
-def display_results(results, total_nominal_cost, total_real_cost, year_inputs):
+def display_results(results, total_nominal_cost, total_real_cost, year_inputs, additional_hours, out_of_hours):
     # Display the detailed cost breakdown
     st.divider()
-    display_cost_breakdown(results, year_inputs)
+    display_cost_breakdown(results, year_inputs, additional_hours, out_of_hours)
     
     st.write("All Calculation Summary Table")
     df_results = pd.DataFrame(results)
@@ -987,19 +999,18 @@ def main():
         This model is a powerful tool for understanding the long-term implications of pay deals and their progress towards restoring doctors' pay. By providing a clear, data-driven view of complex pay scenarios, it aims to facilitate informed discussions and decision-making in pay negotiations.
         """)
 
-    inflation_type, fpr_start_year, fpr_end_year, num_years, fpr_percentages, doctor_counts, year_inputs = setup_sidebar()
+    inflation_type, fpr_start_year, fpr_end_year, num_years, fpr_percentages, doctor_counts, year_inputs, additional_hours, out_of_hours = setup_sidebar()
 
     results, total_nominal_cost, total_real_cost, cumulative_costs = calculate_results(
-        fpr_percentages, doctor_counts, year_inputs, inflation_type
+        fpr_percentages, doctor_counts, year_inputs, inflation_type, additional_hours, out_of_hours
     )
 
     display_fpr_achievement(results)
     display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years)
-    #display_cost_breakdown(results, year_inputs)  # This now includes tax calculations
-    display_results(results, total_nominal_cost, total_real_cost, year_inputs)
+    display_results(results, total_nominal_cost, total_real_cost, year_inputs, additional_hours, out_of_hours)
     
     if st.button("Generate Detailed Cost Report"):
-        report = generate_detailed_report(results, year_inputs, doctor_counts)
+        report = generate_detailed_report(results, year_inputs, doctor_counts, additional_hours, out_of_hours)
         
         # Create a download link
         b64 = base64.b64encode(report.encode()).decode()
@@ -1007,7 +1018,6 @@ def main():
         st.markdown(href, unsafe_allow_html=True)
         
         st.success("Report generated successfully. Click the link above to download.")
-
 
 if __name__ == "__main__":
     main()
