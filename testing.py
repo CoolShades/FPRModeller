@@ -289,9 +289,15 @@ def setup_sidebar():
         )
     
     # Display FPR targets
-    fpr_text = "FPR Targets: "
-    fpr_values = ", ".join([f"N{i+1}: {value:.1f}%" for i, value in enumerate(st.session_state.fpr_targets.values())])
-    st.sidebar.write(f":blue[{fpr_text}**{fpr_values}**]")
+    fpr_values = list(st.session_state.fpr_targets.values())
+    if len(set(fpr_values)) == 1:
+        # All values are the same
+        st.sidebar.write(f":blue[FPR Target: **{fpr_values[0]:.1f}%**]")
+    else:
+        # Values are different
+        fpr_text = "FPR Targets: "
+        fpr_values_str = ", ".join([f"N{i+1}: {value:.1f}%" for i, value in enumerate(fpr_values)])
+        st.sidebar.write(f":blue[{fpr_text}**{fpr_values_str}**]")
     
     # Setup doctor counts
     st.sidebar.subheader("Number of Doctors in Each Nodal Point")
@@ -309,7 +315,7 @@ def setup_sidebar():
     with col1:
         global_inflation = st.number_input("Global Inflation Rate (%)", min_value=0.0, max_value=20.0, value=st.session_state.global_inflation, step=0.1, key="global_inflation", on_change=update_global_settings)
     with col2:
-        global_pay_rise = st.number_input("Global Pay Rise (%)", min_value=0.0, max_value=20.0, value=st.session_state.global_pay_rise, step=0.1, key="global_pay_rise", on_change=update_global_settings)
+        global_pay_rise = st.number_input("Global Pay Rise (%)", min_value=0.0, max_value=40.0, value=st.session_state.global_pay_rise, step=0.1, key="global_pay_rise", on_change=update_global_settings)
     
     # Store doctor_counts in session state
     st.session_state.doctor_counts = doctor_counts
@@ -386,7 +392,7 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                         year_input["nodal_percentages"][name] = st.number_input(
                             f"{name} (%)",
                             min_value=0.0,
-                            max_value=20.0,
+                            max_value=40.0,
                             value=st.session_state[f"nodal_percentages_{year}"][name],
                             step=0.1,
                             format="%.1f",
@@ -400,7 +406,7 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                     "inflation": st.slider(
                         f"Projected Inflation for Year {year} ({2023+year}/{2024+year}) (%)",
                         min_value=0.0,
-                        max_value=10.0,
+                        max_value=15.0,
                         value=st.session_state[f"inflation_{year}"],
                         step=0.1,
                         key=f"inflation_{year}",
@@ -428,7 +434,7 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                         year_input["nodal_percentages"][name] = st.number_input(
                             f"{name} (%)",
                             min_value=0.0,
-                            max_value=20.0,
+                            max_value=40.0,
                             value=st.session_state[f"nodal_percentages_{year}"][name],
                             step=0.1,
                             format="%.1f",
