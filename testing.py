@@ -18,6 +18,44 @@ AVAILABLE_YEARS = [
     "2023/2024"
 ]
 
+def calculate_income_tax(income):
+    if income <= 12570:  # Personal Allowance
+        return 0
+    elif income <= 50270:
+        tax = (income - 12570) * 0.2
+        return tax
+    elif income <= 125140:
+        tax = (50270 - 12570) * 0.2 + (income - 50270) * 0.4
+        return tax
+    else:
+        tax = (50270 - 12570) * 0.2 + (125140 - 50270) * 0.4 + (income - 125140) * 0.45
+        return tax
+
+def calculate_national_insurance(income):
+    weekly_income = income / 52
+    if weekly_income <= 242:
+        return 0
+    elif weekly_income <= 967:
+        ni = (weekly_income - 242) * 0.08 * 52
+        return ni
+    else:
+        ni = (967 - 242) * 0.08 * 52 + (weekly_income - 967) * 0.02 * 52
+        return ni
+    
+def calculate_employer_ni(income):
+    weekly_income = income / 52
+    if weekly_income <= 175:
+        return 0
+    elif weekly_income <= 481:
+        ni = (weekly_income - 175) * 0.138 * 52
+        return ni
+    elif weekly_income <= 967:
+        ni = (481 - 175) * 0.138 * 52 + (weekly_income - 481) * 0.138 * 52
+        return ni
+    else:
+        ni = (481 - 175) * 0.138 * 52 + (967 - 481) * 0.138 * 52 + (weekly_income - 967) * 0.138 * 52
+        return ni
+
 # Calculation Functions
 def calculate_real_terms_change(pay_rise, inflation):
     return ((1 + pay_rise) / (1 + inflation)) - 1
@@ -113,15 +151,17 @@ def update_end_year_options():
         st.session_state.fpr_end_year = st.session_state.end_year_options[-1]
     update_fpr_targets()
 
-# UI Setup Functions
 def setup_sidebar():
     initialize_session_state()
     
     st.sidebar.title("Modeller Settings ⚙️")
     
+    st.sidebar.subheader("Calculate Pay Restoration Targets.")
+    
     inflation_type = st.sidebar.radio("Select inflation measure:", ("RPI", "CPI"), key="inflation_type", on_change=update_fpr_targets, horizontal=True)
     
-    col1, col2, col3 = st.sidebar.columns(3)
+    # Adjusted to two columns for FPR start and end year
+    col1, col2 = st.sidebar.columns(2)
     with col1:
         fpr_start_year = st.selectbox(
             "FPR start year",
@@ -138,8 +178,6 @@ def setup_sidebar():
             key="fpr_end_year",
             on_change=update_fpr_targets
         )
-    with col3:
-        num_years = st.number_input("Number of Years", min_value=0, max_value=10, value=st.session_state.num_years, key="num_years")
     
     # Display FPR targets
     fpr_text = "FPR Targets: "
@@ -155,17 +193,17 @@ def setup_sidebar():
         with cols[i]:
             doctor_counts[name] = st.number_input(f"{name}", min_value=0, value=default_counts[i], step=100, key=f"doctors_{name}")
     
-    # Store doctor_counts in session state
-    st.session_state.doctor_counts = doctor_counts
-    
-    # Add global controls
-    # Add global controls
     st.sidebar.subheader("Global Settings for Future Years")
+    # Moved the number of years to Global Settings
+    num_years = st.sidebar.number_input("Number of Years in Multi-Year Pay Deal (MYPD)", min_value=0, max_value=10, value=st.session_state.num_years, key="num_years")
     col1, col2 = st.sidebar.columns(2)
     with col1:
         global_inflation = st.number_input("Global Inflation Rate (%)", min_value=0.0, max_value=20.0, value=st.session_state.global_inflation, step=0.1, key="global_inflation", on_change=update_global_settings)
     with col2:
         global_pay_rise = st.number_input("Global Pay Rise (%)", min_value=0.0, max_value=20.0, value=st.session_state.global_pay_rise, step=0.1, key="global_pay_rise", on_change=update_global_settings)
+    
+    # Store doctor_counts in session state
+    st.session_state.doctor_counts = doctor_counts
     
     # Check for individual changes and display warning if necessary
     if check_individual_changes():
@@ -310,61 +348,110 @@ def calculate_results(fpr_percentages, doctor_counts, year_inputs, inflation_typ
 
     return results, total_nominal_cost, total_real_cost, cumulative_costs
 
-def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage, doctor_count, year_inputs, inflation_type):
+def calculate_pay_progression(base_pay, post_ddrb_pay, year_inputs, name):
     pay_progression_nominal = [base_pay]
     pay_progression_real = [base_pay]
-    real_terms_pay_cuts = [-fpr_percentage / 100]
-    fpr_progress = [0]
     net_change_in_pay = [0]
-    yearly_basic_costs = []
-    yearly_total_costs = []
 
     for year, year_input in enumerate(year_inputs):
         if year == 0:
-            # Year 0 (2023/2024) calculations - keep existing behavior
             consolidated_increase = year_input["pound_increases"][name]
             percentage_increase = year_input["nodal_percentages"][name]
             total_pay_rise = ((post_ddrb_pay - base_pay) / base_pay) + percentage_increase + (consolidated_increase / base_pay)
             new_nominal_pay = base_pay * (1 + total_pay_rise)
-            
-            # Calculate only the additional cost beyond the already agreed pay deal
-            additional_pay_increase = new_nominal_pay - post_ddrb_pay
-            basic_pay_cost = additional_pay_increase * doctor_count
         else:
-            # Subsequent years - implement new approach
             consolidated_increase = year_input["pound_increases"][name]
             percentage_increase = year_input["nodal_percentages"][name] + year_input["inflation"]
             total_pay_rise = percentage_increase + (consolidated_increase / pay_progression_nominal[-1])
             new_nominal_pay = pay_progression_nominal[-1] * (1 + percentage_increase) + consolidated_increase
-            
-            # Calculate the full cost for subsequent years
-            basic_pay_cost = (new_nominal_pay - pay_progression_nominal[-1]) * doctor_count
 
         inflation_rate = year_input["inflation"]
         new_real_pay = new_nominal_pay / (1 + inflation_rate)
         
+        pay_progression_nominal.append(new_nominal_pay)
+        pay_progression_real.append(new_real_pay)
+        net_change_in_pay.append(total_pay_rise * 100)
+
+    return pay_progression_nominal, pay_progression_real, net_change_in_pay
+
+def calculate_fpr_and_erosion(base_pay, pay_progression_nominal, pay_progression_real, fpr_percentage, year_inputs):
+    real_terms_pay_cuts = [-fpr_percentage / 100]
+    fpr_progress = [0]
+
+    for year, (nominal_pay, real_pay, year_input) in enumerate(zip(pay_progression_nominal[1:], pay_progression_real[1:], year_inputs)):
+        total_pay_rise = (nominal_pay - pay_progression_nominal[year]) / pay_progression_nominal[year]
+        inflation_rate = year_input["inflation"]
+        
         real_terms_change = calculate_real_terms_change(total_pay_rise, inflation_rate)
         current_pay_cut = calculate_new_pay_erosion(real_terms_pay_cuts[-1], real_terms_change)
         
-        pay_progression_nominal.append(new_nominal_pay)
-        pay_progression_real.append(new_real_pay)
         real_terms_pay_cuts.append(current_pay_cut)
-        
-        # Calculate FPR progress without capping at 100%
         current_progress = (fpr_percentage / 100 + current_pay_cut) / (fpr_percentage / 100) * 100
         fpr_progress.append(current_progress)
-        
-        net_change_in_pay.append(total_pay_rise * 100)
-        
-        # Calculate additional costs
-        pension_cost = basic_pay_cost * 0.237
-        additional_hours_cost = (basic_pay_cost / 40) * 8
-        ooh_component = additional_hours_cost * 0.37
-        
-        total_cost = basic_pay_cost + pension_cost + additional_hours_cost + ooh_component
-        
+
+    return real_terms_pay_cuts[1:], fpr_progress[1:]
+
+def calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, post_ddrb_pay):
+    yearly_basic_costs = []
+    yearly_total_costs = []
+    yearly_tax_recouped = []
+    yearly_net_costs = []
+    yearly_employer_ni_costs = []
+
+    for year, (current_pay, prev_pay, year_input) in enumerate(zip(pay_progression_nominal[1:], pay_progression_nominal, year_inputs)):
+        if year == 0:
+            additional_pay_increase = current_pay - post_ddrb_pay
+            basic_pay_cost = additional_pay_increase * doctor_count
+
+            additional_hours_cost = (additional_pay_increase / 40) * 8
+            ooh_component = additional_hours_cost * 0.37
+            
+            # Calculate employer NI only on the additional pay increase
+            employer_ni = calculate_employer_ni(post_ddrb_pay + additional_pay_increase) - calculate_employer_ni(post_ddrb_pay)
+            employer_ni_cost = employer_ni * doctor_count
+
+            total_cost = basic_pay_cost + additional_hours_cost * doctor_count + ooh_component * doctor_count + employer_ni_cost
+
+            post_ddrb_tax = calculate_income_tax(post_ddrb_pay) + calculate_national_insurance(post_ddrb_pay)
+            new_pay_tax = calculate_income_tax(post_ddrb_pay + additional_pay_increase) + calculate_national_insurance(post_ddrb_pay + additional_pay_increase)
+            tax_increase = new_pay_tax - post_ddrb_tax
+            
+            tax_recouped = tax_increase * doctor_count
+        else:
+            basic_pay_cost = (current_pay - prev_pay) * doctor_count
+
+            # Employer NI for the increase in pay
+            employer_ni = calculate_employer_ni(current_pay) - calculate_employer_ni(prev_pay)
+            employer_ni_cost = employer_ni * doctor_count
+
+            pension_cost = basic_pay_cost * 0.237
+            additional_hours_cost = (basic_pay_cost / 40) * 8
+            ooh_component = additional_hours_cost * 0.37
+            
+            total_cost = basic_pay_cost + pension_cost + additional_hours_cost + ooh_component + employer_ni_cost
+
+            previous_tax = calculate_income_tax(prev_pay) + calculate_national_insurance(prev_pay)
+            new_tax = calculate_income_tax(current_pay) + calculate_national_insurance(current_pay)
+            tax_increase = new_tax - previous_tax
+            
+            tax_recouped = tax_increase * doctor_count
+
+        net_cost = total_cost - tax_recouped
+
         yearly_basic_costs.append(basic_pay_cost)
         yearly_total_costs.append(total_cost)
+        yearly_tax_recouped.append(tax_recouped)
+        yearly_net_costs.append(net_cost)
+        yearly_employer_ni_costs.append(employer_ni_cost)
+
+    return yearly_basic_costs, yearly_total_costs, yearly_tax_recouped, yearly_net_costs, yearly_employer_ni_costs
+
+def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage, doctor_count, year_inputs, inflation_type):
+    pay_progression_nominal, pay_progression_real, net_change_in_pay = calculate_pay_progression(base_pay, post_ddrb_pay, year_inputs, name)
+    real_terms_pay_cuts, fpr_progress = calculate_fpr_and_erosion(base_pay, pay_progression_nominal, pay_progression_real, fpr_percentage, year_inputs)
+    
+    # Update here to unpack the fifth return value
+    yearly_basic_costs, yearly_total_costs, yearly_tax_recouped, yearly_net_costs, yearly_employer_ni_costs = calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, post_ddrb_pay)
 
     return {
         "Nodal Point": name,
@@ -376,8 +463,8 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         "Real Total Increase": pay_progression_real[-1] - base_pay,
         "Nominal Percent Increase": (pay_progression_nominal[-1] / base_pay - 1) * 100,
         "Real Percent Increase": (pay_progression_real[-1] / base_pay - 1) * 100,
-        "Real Terms Pay Cuts": real_terms_pay_cuts[1:],
-        "FPR Progress": fpr_progress[1:],
+        "Real Terms Pay Cuts": real_terms_pay_cuts,
+        "FPR Progress": fpr_progress,
         "Net Change in Pay": net_change_in_pay[1:],
         "Doctor Count": doctor_count,
         "Total Nominal Cost": sum(yearly_total_costs),
@@ -386,8 +473,12 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         "Pay Progression Real": pay_progression_real[1:],
         "Yearly Basic Costs": yearly_basic_costs,
         "Yearly Total Costs": yearly_total_costs,
+        "Yearly Tax Recouped": yearly_tax_recouped,
+        "Yearly Net Costs": yearly_net_costs,
+        "Yearly Employer NI Costs": yearly_employer_ni_costs,  # Newly added to the results
     }
 
+# Modify the display_cost_breakdown function
 def display_cost_breakdown(results, year_inputs):
     st.subheader("Cost Breakdown by Year")
     
@@ -395,50 +486,69 @@ def display_cost_breakdown(results, year_inputs):
     tabs = st.tabs([f"{'Initial Year' if year == 0 else f'Year {year}'}: {2023 + year}/{2024 + year}" for year in range(num_years)])
     
     cumulative_cost = 0
+    cumulative_net_cost = 0
+    cumulative_tax_recouped = 0
     for year, tab in enumerate(tabs):
         with tab:
             cost_data = []
             year_total = 0
+            year_net_total = 0
+            year_tax_recouped = 0
             
             for result in results:
                 if year < len(result["Yearly Total Costs"]):
                     total_cost = result["Yearly Total Costs"][year]
+                    employer_ni_cost = result["Yearly Employer NI Costs"][year]
                     basic_pay_cost = result["Yearly Basic Costs"][year]
                     pension_cost = basic_pay_cost * 0.237
                     additional_hours = (basic_pay_cost / 40) * 8
                     ooh_component = additional_hours * 0.37
+                    tax_recouped = result["Yearly Tax Recouped"][year]
+                    net_cost = result["Yearly Net Costs"][year]
                     
                     year_total += total_cost
+                    year_net_total += net_cost
+                    year_tax_recouped += tax_recouped
                     
                     cost_data.append({
                         "Nodal Point": result["Nodal Point"],
                         "Basic Pay Costs": basic_pay_cost,
                         "Pension Costs": pension_cost,
-                        "Additional Hours Costs": additional_hours,
-                        "OOH Costs": ooh_component,
-                        "Total Costs": total_cost
+                        "Additional Hours Costs (Assuming 8 Hours)": additional_hours,
+                        "OOH Costs (Assuming 8 Hours)": ooh_component,
+                        "Employer NI Costs": employer_ni_cost,
+                        "Total Costs": total_cost,
+                        "Tax Recouped": tax_recouped,
+                        "Net Cost": net_cost
                     })
             
             df = pd.DataFrame(cost_data)
             df = df.set_index("Nodal Point")
             
-            # Format currency values
             for col in df.columns:
                 df[col] = df[col].apply(lambda x: f"£{x:,.2f}")
             
             st.dataframe(df.style.set_properties(**{'text-align': 'right'}))
             
             cumulative_cost += year_total
+            cumulative_net_cost += year_net_total
+            cumulative_tax_recouped += year_tax_recouped
             
-            col1, col2 = st.columns([3, 1])
+            col1, col2 = st.columns(2)
             with col1:
                 st.metric(label=f"Total Cost for Year {year}", value=f"£{year_total:,.2f}")
             with col2:
-                st.write(f"Cumulative Cost: £{cumulative_cost:,.2f}")
+                st.metric(label=f"Net Cost for Year {year}", value=f"£{year_net_total:,.2f}", 
+                          delta=f"Tax Recouped: £{year_tax_recouped:,.2f}")
 
-    st.metric(label="Total nominal cost of the deal", value=f"£{cumulative_cost:,.2f}")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(label="Total nominal cost of the deal", value=f"£{cumulative_cost:,.2f}")
+    with col2:
+        st.metric(label="Total net cost of the deal", value=f"£{cumulative_net_cost:,.2f}", 
+                  delta=f"Total Tax Recouped: £{cumulative_tax_recouped:,.2f}")
     st.divider()
-
+    
 def display_results(results, total_nominal_cost, total_real_cost, year_inputs):
     # Display the detailed cost breakdown
     st.divider()
@@ -656,6 +766,12 @@ def display_fpr_achievement(results):
     st.divider()
 
 def main():
+    st.set_page_config(
+    layout="wide",  # Use wide mode
+    initial_sidebar_state="expanded",  # Optionally expand the sidebar by default
+    page_title="MYPD-FPR Modeller",  # Set a title for the web page, visible in the browser tab
+    page_icon="🧊",  # Optionally set a favicon for the page (can be emoji or image URL)
+)
     # Custom CSS to set sidebar width and improve layout
     st.markdown(
     """
@@ -750,6 +866,7 @@ def main():
 
     display_fpr_achievement(results)
     display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years)
+    #display_cost_breakdown(results, year_inputs)  # This now includes tax calculations
     display_results(results, total_nominal_cost, total_real_cost, year_inputs)
 
 if __name__ == "__main__":
