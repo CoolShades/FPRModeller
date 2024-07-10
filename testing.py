@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import io
+import base64
+from contextlib import redirect_stdout
 
 # Constants
 NODAL_POINTS = [
@@ -17,6 +20,20 @@ AVAILABLE_YEARS = [
     "2018/2019", "2019/2020", "2020/2021", "2021/2022", "2022/2023",
     "2023/2024"
 ]
+
+def generate_detailed_report(results, year_inputs, doctor_counts):
+    report = io.StringIO()
+    with redirect_stdout(report):
+        for result in results:
+            name = result['Nodal Point']
+            base_pay = result['Base Pay']
+            pay_progression_nominal = [base_pay] + result['Pay Progression Nominal']
+            post_ddrb_pay = pay_progression_nominal[0]  # Assuming the first pay is post-DDRB
+            doctor_count = doctor_counts[name]
+
+            calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, post_ddrb_pay)
+
+    return report.getvalue()
 
 def calculate_income_tax(income):
     if income <= 12570:  # Personal Allowance
@@ -397,61 +414,127 @@ def calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, po
     yearly_tax_recouped = []
     yearly_net_costs = []
     yearly_employer_ni_costs = []
+    yearly_pension_costs = []
+
+    def calculate_total_pay(basic_pay):
+        additional_hours = (basic_pay / 40) * 8
+        ooh_hours = additional_hours * 0.37
+        return basic_pay, additional_hours, ooh_hours
+
+    def calculate_tax(total_pay):
+        income_tax = calculate_income_tax(total_pay)
+        ni = calculate_national_insurance(total_pay)
+        return income_tax, ni
 
     for year, (current_pay, prev_pay, year_input) in enumerate(zip(pay_progression_nominal[1:], pay_progression_nominal, year_inputs)):
+        print(f"\n{'='*50}")
+        print(f"Detailed breakdown for {name}: Year {year}")
+        print(f"{'='*50}")
+
+        current_basic, current_additional, current_ooh = calculate_total_pay(current_pay)
+        current_total_pay = current_basic + current_additional + current_ooh
+
+        print(f"Current Year Breakdown:")
+        print(f"  Basic Pay: £{current_basic:.2f}")
+        print(f"  Additional Hours: £{current_additional:.2f}")
+        print(f"  On-Call Hours: £{current_ooh:.2f}")
+        print(f"  Total Pay: £{current_total_pay:.2f}")
+
+        current_income_tax, current_ni = calculate_tax(current_total_pay)
+        print(f"Current Year Tax:")
+        print(f"  Income Tax: £{current_income_tax:.2f}")
+        print(f"  National Insurance: £{current_ni:.2f}")
+        print(f"  Total Tax: £{current_income_tax + current_ni:.2f}")
+
         if year == 0:
-            additional_pay_increase = current_pay - post_ddrb_pay
-            basic_pay_cost = additional_pay_increase * doctor_count
+            post_ddrb_basic, post_ddrb_additional, post_ddrb_ooh = calculate_total_pay(post_ddrb_pay)
+            post_ddrb_total_pay = post_ddrb_basic + post_ddrb_additional + post_ddrb_ooh
 
-            additional_hours_cost = (additional_pay_increase / 40) * 8
-            ooh_component = additional_hours_cost * 0.37
-            
-            # Calculate employer NI only on the additional pay increase
-            employer_ni = calculate_employer_ni(post_ddrb_pay + additional_pay_increase) - calculate_employer_ni(post_ddrb_pay)
-            employer_ni_cost = employer_ni * doctor_count
+            print(f"\nPost-DDRB Breakdown:")
+            print(f"  Basic Pay: £{post_ddrb_basic:.2f}")
+            print(f"  Additional Hours: £{post_ddrb_additional:.2f}")
+            print(f"  On-Call Hours: £{post_ddrb_ooh:.2f}")
+            print(f"  Total Pay: £{post_ddrb_total_pay:.2f}")
 
-            total_cost = basic_pay_cost + additional_hours_cost * doctor_count + ooh_component * doctor_count + employer_ni_cost
+            post_ddrb_income_tax, post_ddrb_ni = calculate_tax(post_ddrb_total_pay)
+            print(f"Post-DDRB Tax:")
+            print(f"  Income Tax: £{post_ddrb_income_tax:.2f}")
+            print(f"  National Insurance: £{post_ddrb_ni:.2f}")
+            print(f"  Total Tax: £{post_ddrb_income_tax + post_ddrb_ni:.2f}")
 
-            post_ddrb_tax = calculate_income_tax(post_ddrb_pay) + calculate_national_insurance(post_ddrb_pay)
-            new_pay_tax = calculate_income_tax(post_ddrb_pay + additional_pay_increase) + calculate_national_insurance(post_ddrb_pay + additional_pay_increase)
-            tax_increase = new_pay_tax - post_ddrb_tax
-            
-            tax_recouped = tax_increase * doctor_count
-        else:
-            basic_pay_cost = (current_pay - prev_pay) * doctor_count
-
-            # Employer NI for the increase in pay
-            employer_ni = calculate_employer_ni(current_pay) - calculate_employer_ni(prev_pay)
-            employer_ni_cost = employer_ni * doctor_count
-
+            basic_pay_cost = (current_basic - post_ddrb_basic) * doctor_count
             pension_cost = basic_pay_cost * 0.237
-            additional_hours_cost = (basic_pay_cost / 40) * 8
-            ooh_component = additional_hours_cost * 0.37
-            
-            total_cost = basic_pay_cost + pension_cost + additional_hours_cost + ooh_component + employer_ni_cost
+            total_cost = (current_total_pay - post_ddrb_total_pay) * doctor_count + pension_cost
 
-            previous_tax = calculate_income_tax(prev_pay) + calculate_national_insurance(prev_pay)
-            new_tax = calculate_income_tax(current_pay) + calculate_national_insurance(current_pay)
-            tax_increase = new_tax - previous_tax
-            
-            tax_recouped = tax_increase * doctor_count
+            tax_recouped = ((current_income_tax + current_ni) - (post_ddrb_income_tax + post_ddrb_ni)) * doctor_count
+
+            employer_ni_post_ddrb = calculate_employer_ni(post_ddrb_total_pay)
+            employer_ni_current = calculate_employer_ni(current_total_pay)
+            employer_ni_cost = (employer_ni_current - employer_ni_post_ddrb) * doctor_count
+
+            print(f"\nCost Calculations:")
+            print(f"  Basic Pay Cost: (£{current_basic:.2f} - £{post_ddrb_basic:.2f}) * {doctor_count} = £{basic_pay_cost:.2f}")
+            print(f"  Pension Cost: £{basic_pay_cost:.2f} * 0.237 = £{pension_cost:.2f}")
+            print(f"  Total Cost: (£{current_total_pay:.2f} - £{post_ddrb_total_pay:.2f}) * {doctor_count} + £{pension_cost:.2f} = £{total_cost:.2f}")
+            print(f"  Tax Recouped: (£{current_income_tax + current_ni:.2f} - £{post_ddrb_income_tax + post_ddrb_ni:.2f}) * {doctor_count} = £{tax_recouped:.2f}")
+            print(f"  Employer NI Cost: (£{employer_ni_current:.2f} - £{employer_ni_post_ddrb:.2f}) * {doctor_count} = £{employer_ni_cost:.2f}")
+
+        else:
+            prev_basic, prev_additional, prev_ooh = calculate_total_pay(prev_pay)
+            prev_total_pay = prev_basic + prev_additional + prev_ooh
+
+            print(f"\nPrevious Year Breakdown:")
+            print(f"  Basic Pay: £{prev_basic:.2f}")
+            print(f"  Additional Hours: £{prev_additional:.2f}")
+            print(f"  On-Call Hours: £{prev_ooh:.2f}")
+            print(f"  Total Pay: £{prev_total_pay:.2f}")
+
+            prev_income_tax, prev_ni = calculate_tax(prev_total_pay)
+            print(f"Previous Year Tax:")
+            print(f"  Income Tax: £{prev_income_tax:.2f}")
+            print(f"  National Insurance: £{prev_ni:.2f}")
+            print(f"  Total Tax: £{prev_income_tax + prev_ni:.2f}")
+
+            basic_pay_cost = (current_basic - prev_basic) * doctor_count
+            pension_cost = basic_pay_cost * 0.237
+            total_cost = (current_total_pay - prev_total_pay) * doctor_count + pension_cost
+
+            tax_recouped = ((current_income_tax + current_ni) - (prev_income_tax + prev_ni)) * doctor_count
+
+            employer_ni_prev = calculate_employer_ni(prev_total_pay)
+            employer_ni_current = calculate_employer_ni(current_total_pay)
+            employer_ni_cost = (employer_ni_current - employer_ni_prev) * doctor_count
+
+            print(f"\nCost Calculations:")
+            print(f"  Basic Pay Cost: (£{current_basic:.2f} - £{prev_basic:.2f}) * {doctor_count} = £{basic_pay_cost:.2f}")
+            print(f"  Pension Cost: £{basic_pay_cost:.2f} * 0.237 = £{pension_cost:.2f}")
+            print(f"  Total Cost: (£{current_total_pay:.2f} - £{prev_total_pay:.2f}) * {doctor_count} + £{pension_cost:.2f} = £{total_cost:.2f}")
+            print(f"  Tax Recouped: (£{current_income_tax + current_ni:.2f} - £{prev_income_tax + prev_ni:.2f}) * {doctor_count} = £{tax_recouped:.2f}")
+            print(f"  Employer NI Cost: (£{employer_ni_current:.2f} - £{employer_ni_prev:.2f}) * {doctor_count} = £{employer_ni_cost:.2f}")
 
         net_cost = total_cost - tax_recouped
+
+        print(f"\nFinal Results:")
+        print(f"  Total Cost: £{total_cost:.2f}")
+        print(f"  Tax Recouped: £{tax_recouped:.2f}")
+        print(f"  Net Cost: £{net_cost:.2f}")
+        print(f"  Employer NI Cost: £{employer_ni_cost:.2f}")
+        print(f"  Pension Cost: £{pension_cost:.2f}")
 
         yearly_basic_costs.append(basic_pay_cost)
         yearly_total_costs.append(total_cost)
         yearly_tax_recouped.append(tax_recouped)
         yearly_net_costs.append(net_cost)
         yearly_employer_ni_costs.append(employer_ni_cost)
+        yearly_pension_costs.append(pension_cost)
 
-    return yearly_basic_costs, yearly_total_costs, yearly_tax_recouped, yearly_net_costs, yearly_employer_ni_costs
+    return yearly_basic_costs, yearly_total_costs, yearly_tax_recouped, yearly_net_costs, yearly_employer_ni_costs, yearly_pension_costs
 
 def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage, doctor_count, year_inputs, inflation_type):
     pay_progression_nominal, pay_progression_real, net_change_in_pay = calculate_pay_progression(base_pay, post_ddrb_pay, year_inputs, name)
     real_terms_pay_cuts, fpr_progress = calculate_fpr_and_erosion(base_pay, pay_progression_nominal, pay_progression_real, fpr_percentage, year_inputs)
     
-    # Update here to unpack the fifth return value
-    yearly_basic_costs, yearly_total_costs, yearly_tax_recouped, yearly_net_costs, yearly_employer_ni_costs = calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, post_ddrb_pay)
+    yearly_basic_costs, yearly_total_costs, yearly_tax_recouped, yearly_net_costs, yearly_employer_ni_costs, yearly_pension_costs = calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, post_ddrb_pay)
 
     return {
         "Nodal Point": name,
@@ -475,9 +558,10 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         "Yearly Total Costs": yearly_total_costs,
         "Yearly Tax Recouped": yearly_tax_recouped,
         "Yearly Net Costs": yearly_net_costs,
-        "Yearly Employer NI Costs": yearly_employer_ni_costs,  # Newly added to the results
+        "Yearly Employer NI Costs": yearly_employer_ni_costs,
+        "Yearly Pension Costs": yearly_pension_costs,  # Add this new field
     }
-
+    
 # Modify the display_cost_breakdown function
 def display_cost_breakdown(results, year_inputs):
     st.subheader("Cost Breakdown by Year")
@@ -868,6 +952,18 @@ def main():
     display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years)
     #display_cost_breakdown(results, year_inputs)  # This now includes tax calculations
     display_results(results, total_nominal_cost, total_real_cost, year_inputs)
+    
+    st.subheader("Download Detailed Cost Report")
+
+    if st.button("Generate Detailed Cost Report"):
+        report = generate_detailed_report(results, year_inputs, doctor_counts)
+        
+        # Create a download link
+        b64 = base64.b64encode(report.encode()).decode()
+        href = f'<a href="data:file/txt;base64,{b64}" download="detailed_cost_report.txt">Download Detailed Cost Report</a>'
+        st.markdown(href, unsafe_allow_html=True)
+        
+        st.success("Report generated successfully. Click the link above to download.")
 
 if __name__ == "__main__":
     main()
