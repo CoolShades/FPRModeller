@@ -908,7 +908,7 @@ def display_fpr_achievement(results):
 
 def main():
     st.set_page_config(
-    layout="wide",  # Use wide mode
+    #layout="wide",  # Use wide mode
     initial_sidebar_state="expanded",  # Optionally expand the sidebar by default
     page_title="MYPD-FPR Modeller",  # Set a title for the web page, visible in the browser tab
     page_icon="🧊",  # Optionally set a favicon for the page (can be emoji or image URL)
