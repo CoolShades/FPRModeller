@@ -464,20 +464,21 @@ def calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, po
 
             basic_pay_cost = (current_basic - post_ddrb_basic) * doctor_count
             pension_cost = basic_pay_cost * 0.237
-            total_cost = (current_total_pay - post_ddrb_total_pay) * doctor_count + pension_cost
-
-            tax_recouped = ((current_income_tax + current_ni) - (post_ddrb_income_tax + post_ddrb_ni)) * doctor_count
 
             employer_ni_post_ddrb = calculate_employer_ni(post_ddrb_total_pay)
             employer_ni_current = calculate_employer_ni(current_total_pay)
             employer_ni_cost = (employer_ni_current - employer_ni_post_ddrb) * doctor_count
 
+            total_cost = (current_total_pay - post_ddrb_total_pay) * doctor_count + pension_cost + employer_ni_cost
+
+            tax_recouped = ((current_income_tax + current_ni) - (post_ddrb_income_tax + post_ddrb_ni)) * doctor_count
+
             print(f"\nCost Calculations:")
             print(f"  Basic Pay Cost: (£{current_basic:.2f} - £{post_ddrb_basic:.2f}) * {doctor_count} = £{basic_pay_cost:.2f}")
             print(f"  Pension Cost: £{basic_pay_cost:.2f} * 0.237 = £{pension_cost:.2f}")
-            print(f"  Total Cost: (£{current_total_pay:.2f} - £{post_ddrb_total_pay:.2f}) * {doctor_count} + £{pension_cost:.2f} = £{total_cost:.2f}")
-            print(f"  Tax Recouped: (£{current_income_tax + current_ni:.2f} - £{post_ddrb_income_tax + post_ddrb_ni:.2f}) * {doctor_count} = £{tax_recouped:.2f}")
             print(f"  Employer NI Cost: (£{employer_ni_current:.2f} - £{employer_ni_post_ddrb:.2f}) * {doctor_count} = £{employer_ni_cost:.2f}")
+            print(f"  Total Cost: (£{current_total_pay:.2f} - £{post_ddrb_total_pay:.2f}) * {doctor_count} + £{pension_cost:.2f} + £{employer_ni_cost:.2f} = £{total_cost:.2f}")
+            print(f"  Tax Recouped: (£{current_income_tax + current_ni:.2f} - £{post_ddrb_income_tax + post_ddrb_ni:.2f}) * {doctor_count} = £{tax_recouped:.2f}")
 
         else:
             prev_basic, prev_additional, prev_ooh = calculate_total_pay(prev_pay)
@@ -497,20 +498,21 @@ def calculate_costs(pay_progression_nominal, doctor_count, year_inputs, name, po
 
             basic_pay_cost = (current_basic - prev_basic) * doctor_count
             pension_cost = basic_pay_cost * 0.237
-            total_cost = (current_total_pay - prev_total_pay) * doctor_count + pension_cost
-
-            tax_recouped = ((current_income_tax + current_ni) - (prev_income_tax + prev_ni)) * doctor_count
 
             employer_ni_prev = calculate_employer_ni(prev_total_pay)
             employer_ni_current = calculate_employer_ni(current_total_pay)
             employer_ni_cost = (employer_ni_current - employer_ni_prev) * doctor_count
 
+            total_cost = (current_total_pay - prev_total_pay) * doctor_count + pension_cost + employer_ni_cost
+
+            tax_recouped = ((current_income_tax + current_ni) - (prev_income_tax + prev_ni)) * doctor_count
+
             print(f"\nCost Calculations:")
             print(f"  Basic Pay Cost: (£{current_basic:.2f} - £{prev_basic:.2f}) * {doctor_count} = £{basic_pay_cost:.2f}")
             print(f"  Pension Cost: £{basic_pay_cost:.2f} * 0.237 = £{pension_cost:.2f}")
-            print(f"  Total Cost: (£{current_total_pay:.2f} - £{prev_total_pay:.2f}) * {doctor_count} + £{pension_cost:.2f} = £{total_cost:.2f}")
-            print(f"  Tax Recouped: (£{current_income_tax + current_ni:.2f} - £{prev_income_tax + prev_ni:.2f}) * {doctor_count} = £{tax_recouped:.2f}")
             print(f"  Employer NI Cost: (£{employer_ni_current:.2f} - £{employer_ni_prev:.2f}) * {doctor_count} = £{employer_ni_cost:.2f}")
+            print(f"  Total Cost: (£{current_total_pay:.2f} - £{prev_total_pay:.2f}) * {doctor_count} + £{pension_cost:.2f} + £{employer_ni_cost:.2f} = £{total_cost:.2f}")
+            print(f"  Tax Recouped: (£{current_income_tax + current_ni:.2f} - £{prev_income_tax + prev_ni:.2f}) * {doctor_count} = £{tax_recouped:.2f}")
 
         net_cost = total_cost - tax_recouped
 
