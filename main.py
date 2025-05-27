@@ -298,9 +298,9 @@ def setup_sidebar():
     st.sidebar.subheader("Global Settings for Future Years")
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        global_inflation = st.number_input("Global Inflation Rate (%)", min_value=0.0, max_value=20.0, value=st.session_state.global_inflation, step=0.1, key="global_inflation", on_change=update_global_settings)
+        global_inflation = st.number_input("Global Inflation Rate (%)", min_value=0.0, max_value=30.0, value=st.session_state.global_inflation, step=0.1, key="global_inflation", on_change=update_global_settings)
     with col2:
-        global_pay_rise = st.number_input("Global Pay Rise (%)", min_value=0.0, max_value=20.0, value=st.session_state.global_pay_rise, step=0.1, key="global_pay_rise", on_change=update_global_settings)
+        global_pay_rise = st.number_input("Global Pay Rise (%)", min_value=0.0, max_value=30.0, value=st.session_state.global_pay_rise, step=0.1, key="global_pay_rise", on_change=update_global_settings)
     
     # Check for individual changes and display warning if necessary
     if check_individual_changes():
@@ -749,84 +749,6 @@ def display_visualizations(results, cumulative_costs, year_inputs, inflation_typ
             progress_df = create_fpr_progress_table(result, num_years, year_inputs)
             st.table(progress_df)
             
-def create_combined_pay_progression_chart(results, num_years):
-    """Create a simple bar chart showing final pay for each nodal point"""
-    fig = go.Figure()
-    
-    # Get nodal point names and final pay
-    nodal_names = [result["Nodal Point"] for result in results]
-    baseline_pays = [result["2024/25 Pay"] for result in results]
-    final_pays = [result["Final Pay"] for result in results]
-    increases = [final - baseline for final, baseline in zip(final_pays, baseline_pays)]
-    
-    # Define colors for each nodal point
-    colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7']
-    
-    # Add bars showing final pay
-    fig.add_trace(
-        go.Bar(
-            x=nodal_names,
-            y=final_pays,
-            marker_color=colors,
-            text=[f"£{pay:,.0f}" for pay in final_pays],
-            textposition='outside',
-            textfont=dict(size=14, color='black', family='Arial Bold'),
-            hovertemplate='<b>%{x}</b><br>Final Pay: £%{y:,.0f}<br>Increase: £%{customdata:,.0f}<extra></extra>',
-            customdata=increases,
-            showlegend=False
-        )
-    )
-    
-    fig.update_layout(
-        title={
-            'text': "Final Pay by Nodal Point",
-            'x': 0.5,
-            'xanchor': 'center',
-            'font': {'size': 18}
-        },
-        height=500,
-        xaxis_title="Nodal Point",
-        yaxis_title="Pay (£)",
-        showlegend=False,
-        margin=dict(t=80, b=60, l=60, r=60)
-    )
-    
-    # Set y-axis range to accommodate text labels
-    max_pay = max(final_pays)
-    fig.update_yaxes(range=[0, max_pay * 1.15])
-    
-    return fig
-
-def create_combined_fpr_progress_table(results, num_years, year_inputs):
-    """Create a comprehensive summary table for all nodal points"""
-    
-    # Create summary data for final year
-    summary_data = []
-    
-    for result in results:
-        nodal_name = result["Nodal Point"]
-        final_fpr_progress = result["FPR Progress"][-1]
-        final_pay_erosion = result["Real Terms Pay Cuts"][-1]
-        base_pay = result["2024/25 Pay"]
-        final_pay = result["Final Pay"]
-        total_increase = final_pay - base_pay
-        percent_increase = (final_pay / base_pay - 1) * 100
-        
-        # Determine FPR status
-        fpr_status = "✅ Achieved" if final_fpr_progress >= 100 else f"❌ {final_fpr_progress:.1f}%"
-        
-        summary_data.append({
-            "Nodal Point": nodal_name,
-            "2024/25 Base Pay": f"£{base_pay:,.0f}",
-            "Final Pay": f"£{final_pay:,.0f}",
-            "Total Increase": f"£{total_increase:,.0f}",
-            "% Increase": f"{percent_increase:.1f}%",
-            "FPR Status": fpr_status,
-            "Remaining Pay Erosion": f"{final_pay_erosion * 100:.1f}%"
-        })
-    
-    df = pd.DataFrame(summary_data)
-    return df
 
 def create_pay_progression_chart(result, num_years):
     # Update year labels to show Year 0 as 2025/2026
