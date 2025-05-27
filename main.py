@@ -418,7 +418,7 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                         year_input["nodal_percentages"][name] = st.number_input(
                             f"{name} (%)",
                             min_value=0.0,
-                            max_value=20.0,
+                            max_value=30.0,
                             value=NODAL_SPECIFIC_PAY_AWARDS['2025/2026'][name] * 100,
                             step=0.1,
                             format="%.1f",
@@ -461,7 +461,7 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                         year_input["nodal_percentages"][name] = st.number_input(
                             f"{name} (%)",
                             min_value=0.0,
-                            max_value=20.0,
+                            max_value=30.0,
                             value=st.session_state[f"nodal_percentages_{year}"][name],
                             step=0.1,
                             format="%.1f",
