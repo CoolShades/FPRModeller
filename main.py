@@ -98,23 +98,23 @@ def calculate_fpr_percentage(start_year, end_year, inflation_type, nodal_point=N
     # Base pay data from the provided tables
     pay_data = [
         {"year": "2008/2009", "pay_award": 0.0, "rpi": 0.0, "cpi": 0.0},  # Baseline year
-        {"year": "2009/2010", "pay_award": 0.015, "rpi": 0.046, "cpi": 0.033},
+        {"year": "2009/2010", "pay_award": 0.015, "rpi": 0.053, "cpi": 0.037},
         {"year": "2010/2011", "pay_award": 0.010, "rpi": 0.052, "cpi": 0.045},
-        {"year": "2011/2012", "pay_award": 0.000, "rpi": 0.032, "cpi": 0.028},
-        {"year": "2012/2013", "pay_award": 0.000, "rpi": 0.030, "cpi": 0.026},
-        {"year": "2013/2014", "pay_award": 0.010, "rpi": 0.024, "cpi": 0.015},
-        {"year": "2014/2015", "pay_award": 0.000, "rpi": 0.010, "cpi": 0.000},
-        {"year": "2015/2016", "pay_award": 0.000, "rpi": 0.018, "cpi": 0.007},
-        {"year": "2016/2017", "pay_award": 0.010, "rpi": 0.036, "cpi": 0.027},
-        {"year": "2017/2018", "pay_award": 0.010, "rpi": 0.033, "cpi": 0.025},
-        {"year": "2018/2019", "pay_award": 0.020, "rpi": 0.026, "cpi": 0.018},
-        {"year": "2019/2020", "pay_award": 0.023, "rpi": 0.015, "cpi": 0.009},
-        {"year": "2020/2021", "pay_award": 0.030, "rpi": 0.041, "cpi": 0.026},
-        {"year": "2021/2022", "pay_award": 0.030, "rpi": 0.116, "cpi": 0.091},
-        {"year": "2022/2023", "pay_award": 0.030, "rpi": 0.097, "cpi": 0.073},
-        {"year": "2023/2024", "pay_award": None, "rpi": 0.036, "cpi": 0.025}, # Will use nodal-specific values
+        {"year": "2011/2012", "pay_award": 0.000, "rpi": 0.035, "cpi": 0.030},
+        {"year": "2012/2013", "pay_award": 0.000, "rpi": 0.029, "cpi": 0.024},
+        {"year": "2013/2014", "pay_award": 0.010, "rpi": 0.025, "cpi": 0.018},
+        {"year": "2014/2015", "pay_award": 0.000, "rpi": 0.009, "cpi": -0.001},
+        {"year": "2015/2016", "pay_award": 0.000, "rpi": 0.013, "cpi": 0.003},
+        {"year": "2016/2017", "pay_award": 0.010, "rpi": 0.035, "cpi": 0.027},
+        {"year": "2017/2018", "pay_award": 0.010, "rpi": 0.034, "cpi": 0.024},
+        {"year": "2018/2019", "pay_award": 0.020, "rpi": 0.030, "cpi": 0.021},
+        {"year": "2019/2020", "pay_award": 0.023, "rpi": 0.015, "cpi": 0.008},
+        {"year": "2020/2021", "pay_award": 0.030, "rpi": 0.029, "cpi": 0.015},
+        {"year": "2021/2022", "pay_award": 0.030, "rpi": 0.111, "cpi": 0.090},
+        {"year": "2022/2023", "pay_award": 0.030, "rpi": 0.114, "cpi": 0.087},
+        {"year": "2023/2024", "pay_award": None, "rpi": 0.033, "cpi": 0.023}, # Will use nodal-specific values
         {"year": "2024/2025", "pay_award": None, "rpi": 0.045, "cpi": 0.035}, # Will use nodal-specific values
-        {"year": "2025/2026", "pay_award": None, "rpi": None, "cpi": None}  # Will use user-defined inflation rates
+        {"year": "2025/2026", "pay_award": None, "rpi": 0.045, "cpi": 0.035}
     ]
     
     # If a nodal point is specified, use nodal-specific pay awards for 2023/2024, 2024/2025, and 2025/2026
@@ -183,7 +183,7 @@ def initialize_session_state():
     if 'fpr_start_year' not in st.session_state:
         st.session_state.fpr_start_year = AVAILABLE_YEARS[0]
     if 'fpr_end_year' not in st.session_state:
-        st.session_state.fpr_end_year = AVAILABLE_YEARS[-1]
+        st.session_state.fpr_end_year = "2025/2026"  # Set default to 2025/26
     if 'inflation_type' not in st.session_state:
         st.session_state.inflation_type = "RPI"
     if 'end_year_options' not in st.session_state:
@@ -197,15 +197,26 @@ def initialize_session_state():
     if 'global_pay_rise' not in st.session_state:
         # Set default based on inflation type
         if st.session_state.inflation_type == "RPI":
-            st.session_state.global_pay_rise = 18.85
+            st.session_state.global_pay_rise = 9.96
         else:  # CPI
-            st.session_state.global_pay_rise = 8.7
+            st.session_state.global_pay_rise = 4.3
     if 'num_years' not in st.session_state:
         st.session_state.num_years = 2  # Default to 2 years
     
     # Initial targets will be calculated in setup_sidebar after year_inputs are created
 
 def update_fpr_targets(year_inputs=None):
+    # If year_inputs is None or empty, create default year_inputs for 2025/26
+    if not year_inputs:
+        # Create default year_inputs with 2025/26 inflation values
+        default_rpi = 4.5 / 100  # 4.5% RPI
+        default_cpi = 3.5 / 100  # 3.5% CPI
+        year_inputs = [{
+            "rpi": default_rpi,
+            "cpi": default_cpi,
+            "inflation": default_rpi if st.session_state.inflation_type == "RPI" else default_cpi
+        }]
+    
     st.session_state.fpr_targets = {
         name: calculate_fpr_percentage(st.session_state.fpr_start_year, st.session_state.fpr_end_year,
                                       st.session_state.inflation_type, name, year_inputs)
@@ -226,9 +237,9 @@ def update_end_year_options():
 def update_global_pay_rise_for_inflation():
     """Update global pay rise default based on inflation type"""
     if st.session_state.inflation_type == "RPI":
-        st.session_state.global_pay_rise = 18.85
+        st.session_state.global_pay_rise = 9.96
     else:  # CPI
-        st.session_state.global_pay_rise = 8.7
+        st.session_state.global_pay_rise = 4.3
     
     # Also update individual year settings if they exist
     if 'num_years' in st.session_state:
@@ -269,30 +280,25 @@ def setup_sidebar():
     with col3:
         num_years = st.number_input("Number of Years", min_value=0, max_value=10, value=st.session_state.num_years, key="num_years")
     
-    # Display FPR targets
-    fpr_text = "FPR Targets: "
-    fpr_values = ", ".join([f"N{i+1}: {value:.1f}%" for i, value in enumerate(st.session_state.fpr_targets.values())])
-    st.sidebar.write(f":blue[{fpr_text}**{fpr_values}**]")
-    
-    # Setup doctor counts
-    st.sidebar.subheader("Number of Doctors in Each Nodal Point")
-    cols = st.sidebar.columns(5)
-    doctor_counts = {}
-    default_counts = [8000, 6000, 20000, 25000, 6000]
-    for i, (name, _, _) in enumerate(NODAL_POINTS):
-        with cols[i]:
-            doctor_counts[name] = st.number_input(f"{name}", min_value=0, value=default_counts[i], step=100, key=f"doctors_{name}")
+    # Setup doctor counts in expander
+    with st.sidebar.expander("Number of Doctors in Each Nodal Point"):
+        cols = st.columns(5)
+        doctor_counts = {}
+        default_counts = [8000, 6000, 20000, 25000, 6000]
+        for i, (name, _, _) in enumerate(NODAL_POINTS):
+            with cols[i]:
+                doctor_counts[name] = st.number_input(f"{name}", min_value=0, value=default_counts[i], step=100, key=f"doctors_{name}")
     
     # Store doctor_counts in session state
     st.session_state.doctor_counts = doctor_counts
     
-    # Add additional hours and out-of-hours assumptions
-    st.sidebar.subheader("Working Hours Assumptions")
-    col1, col2 = st.sidebar.columns(2)
-    with col1:
-        additional_hours = st.number_input("Additional Hours", min_value=0, max_value=24, value=8, step=1, key="additional_hours")
-    with col2:
-        out_of_hours = st.number_input("Out of Hours", min_value=0, max_value=24, value=8, step=1, key="out_of_hours")
+    # Add additional hours and out-of-hours assumptions in expander
+    with st.sidebar.expander("Working Hours Assumptions"):
+        col1, col2 = st.columns(2)
+        with col1:
+            additional_hours = st.number_input("Additional Hours", min_value=0, max_value=24, value=8, step=1, key="additional_hours")
+        with col2:
+            out_of_hours = st.number_input("Out of Hours", min_value=0, max_value=24, value=8, step=1, key="out_of_hours")
     
     # Add global controls
     st.sidebar.subheader("Global Settings for Future Years")
@@ -317,6 +323,29 @@ def setup_sidebar():
     
     # Update FPR targets with the new year inputs
     update_fpr_targets(year_inputs)
+    
+    # Display FPR targets AFTER year_inputs are created and FPR targets are calculated
+    fpr_text = "FPR Targets (% rise needed): "
+    if st.session_state.fpr_targets:  # Only display if targets exist
+        fpr_values = ", ".join([f"N{i+1}: {value:.1f}%" for i, value in enumerate(st.session_state.fpr_targets.values())])
+        st.sidebar.write(f":blue[{fpr_text}**{fpr_values}**]")
+        
+        # Calculate and display current pay erosion
+        pay_erosion_text = "Pay Erosion (current): "
+        pay_erosion_values = []
+        for name, fpr_target in st.session_state.fpr_targets.items():
+            # If FPR target is X%, then pay erosion is calculated as:
+            # pay_erosion = (1 - 1/(1 + fpr_target/100)) * 100
+            # This is because if you need X% to restore, then current value is 100/(1+X/100) of original
+            fpr_decimal = fpr_target / 100
+            pay_erosion_percent = (1 - 1/(1 + fpr_decimal)) * 100
+            pay_erosion_values.append(f"N{list(st.session_state.fpr_targets.keys()).index(name)+1}: -{pay_erosion_percent:.1f}%")
+        
+        pay_erosion_display = ", ".join(pay_erosion_values)
+        st.sidebar.write(f":red[{pay_erosion_text}**{pay_erosion_display}**]")
+    else:
+        st.sidebar.write(f":blue[{fpr_text}**Calculating...**]")
+        st.sidebar.write(f":red[Pay Erosion (current): **Calculating...**]")
     
     return inflation_type, fpr_start_year, fpr_end_year, num_years, st.session_state.fpr_targets, st.session_state.doctor_counts, year_inputs, additional_hours, out_of_hours
 
@@ -418,12 +447,12 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                         year_input["nodal_percentages"][name] = st.number_input(
                             f"{name} (%)",
                             min_value=0.0,
-                            max_value=30.0,
+                            max_value=50.0,
                             value=NODAL_SPECIFIC_PAY_AWARDS['2025/2026'][name] * 100,
                             step=0.1,
                             format="%.1f",
                             key=f"additional_offer_nodal_percentage_{name}",
-                            help=f"This is the already offered {NODAL_SPECIFIC_PAY_AWARDS['2025/2026'][name] * 100:.1f}% for {name}. Any change will be additional to this."
+                            help=f"Total percentage pay rise for {name}. Current offer is {NODAL_SPECIFIC_PAY_AWARDS['2025/2026'][name] * 100:.1f}%. Set to {st.session_state.fpr_targets.get(name, 0):.1f}% to achieve FPR."
                         ) / 100
         else:
             with st.sidebar.expander(f"Year {year} ({2025+year}/{2026+year})"):
@@ -523,28 +552,26 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
             # Year 0 (2025/2026) calculations
             consolidated_increase = year_input["pound_increases"][name]
             
-            # The standard 2025/26 percentage increase is already calculated in post_ddrb_pay
-            standard_2025_26_increase = (post_ddrb_pay / base_pay) - 1
-            percentage_increase = year_input["nodal_percentages"][name] - standard_2025_26_increase
-            if percentage_increase < 0:
-                percentage_increase = 0
-                
-            total_pay_rise = standard_2025_26_increase + percentage_increase + (consolidated_increase / base_pay)
+            # Use the input percentage as the total pay rise for 2025/26
+            total_percentage_from_input = year_input["nodal_percentages"][name]
+            consolidated_percentage = consolidated_increase / base_pay
+            
+            total_pay_rise = total_percentage_from_input + consolidated_percentage
             new_nominal_pay = base_pay * (1 + total_pay_rise)
             
             # Calculate comprehensive costs for Year 0
             current_basic, current_additional, current_ooh, current_total_pay = calculate_total_pay(new_nominal_pay)
             current_income_tax, current_ni, current_pension, current_employer_ni = calculate_tax_and_ni(current_total_pay, new_nominal_pay)
             
-            # Compare with post-DDRB baseline (the already offered deal)
-            post_ddrb_basic, post_ddrb_additional, post_ddrb_ooh, post_ddrb_total_pay = calculate_total_pay(post_ddrb_pay)
-            post_ddrb_income_tax, post_ddrb_ni, post_ddrb_pension, post_ddrb_employer_ni = calculate_tax_and_ni(post_ddrb_total_pay, post_ddrb_pay)
+            # Compare with 2024/25 baseline (since we're now calculating total pay rise from 2024/25)
+            baseline_basic, baseline_additional, baseline_ooh, baseline_total_pay = calculate_total_pay(base_pay)
+            baseline_income_tax, baseline_ni, baseline_pension, baseline_employer_ni = calculate_tax_and_ni(baseline_total_pay, base_pay)
             
-            basic_pay_cost = (current_basic - post_ddrb_basic) * doctor_count
-            pension_cost = (current_pension - post_ddrb_pension) * doctor_count
-            employer_ni_cost = (current_employer_ni - post_ddrb_employer_ni) * doctor_count
-            total_cost = (current_total_pay - post_ddrb_total_pay) * doctor_count + pension_cost + employer_ni_cost
-            tax_recouped = ((current_income_tax + current_ni) - (post_ddrb_income_tax + post_ddrb_ni)) * doctor_count
+            basic_pay_cost = (current_basic - baseline_basic) * doctor_count
+            pension_cost = (current_pension - baseline_pension) * doctor_count
+            employer_ni_cost = (current_employer_ni - baseline_employer_ni) * doctor_count
+            total_cost = (current_total_pay - baseline_total_pay) * doctor_count + pension_cost + employer_ni_cost
+            tax_recouped = ((current_income_tax + current_ni) - (baseline_income_tax + baseline_ni)) * doctor_count
             
         else:
             # Subsequent years (2026/2027 onwards)
@@ -581,15 +608,44 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         inflation_rate = year_input["inflation"]
         new_real_pay = new_nominal_pay / (1 + inflation_rate)
         
-        real_terms_change = calculate_real_terms_change(total_pay_rise, inflation_rate)
-        current_pay_cut = calculate_new_pay_erosion(real_terms_pay_cuts[-1], real_terms_change)
+        # Calculate pay erosion directly based on FPR achievement
+        fpr_target_decimal = fpr_percentage / 100
+        total_nominal_rise_given = (new_nominal_pay / base_pay) - 1
+        
+        # Calculate what nominal rise is needed to achieve FPR with current inflation
+        adjusted_fpr_target = (1 + fpr_target_decimal) * (1 + inflation_rate) - 1
+        
+        # Calculate current pay erosion based on how much we've achieved vs what's needed
+        if adjusted_fpr_target > 0:
+            # Calculate the real-terms effect of what we gave vs what was needed
+            real_terms_achieved = (1 + total_nominal_rise_given) / (1 + inflation_rate) - 1
+            real_terms_needed = fpr_target_decimal
+            
+            # Pay erosion/gain = difference between what was achieved and what was needed
+            current_pay_cut = real_terms_needed - real_terms_achieved
+        else:
+            current_pay_cut = 0
         
         pay_progression_nominal.append(new_nominal_pay)
         pay_progression_real.append(new_real_pay)
         real_terms_pay_cuts.append(current_pay_cut)
         
-        # Calculate FPR progress without capping at 100%
-        current_progress = (fpr_percentage / 100 + current_pay_cut) / (fpr_percentage / 100) * 100
+        # Calculate FPR progress correctly accounting for current year inflation
+        # FPR progress should measure real-terms restoration, not just nominal pay rise
+        fpr_target_decimal = fpr_percentage / 100  # Target nominal pay rise needed for FPR (calculated without current year inflation)
+        total_nominal_rise_given = (new_nominal_pay / base_pay) - 1  # Total nominal pay rise from 2024/25 baseline
+        
+        # Adjust FPR target for current year inflation
+        # If inflation is higher, we need a higher nominal rise to achieve the same real restoration
+        adjusted_fpr_target = (1 + fpr_target_decimal) * (1 + inflation_rate) - 1
+        
+        # Calculate progress as percentage of adjusted target achieved
+        if adjusted_fpr_target > 0:
+            current_progress = (total_nominal_rise_given / adjusted_fpr_target) * 100
+        else:
+            current_progress = 100  # If no FPR target needed, we're at 100%
+        
+        # Don't cap progress - it can exceed 100% if more than FPR is achieved
         fpr_progress.append(current_progress)
         
         net_change_in_pay.append(total_pay_rise * 100)
@@ -625,7 +681,11 @@ def display_cost_breakdown(results, year_inputs, additional_hours, out_of_hours)
     
     num_years = len(year_inputs)
     # Skip Year 0, start from Year 1
-    tabs = st.tabs([f"Year {year}: {2025 + year}/{2026 + year}" for year in range(1, num_years)])
+    if num_years > 1:
+        tabs = st.tabs([f"Year {year}: {2025 + year}/{2026 + year}" for year in range(1, num_years)])
+    else:
+        st.write("No future years configured for cost breakdown.")
+        return
     
     cumulative_cost = 0
     cumulative_net_cost = 0
@@ -869,30 +929,33 @@ def create_fpr_progress_table(selected_data, num_years, year_inputs):
     return df
     
 def display_fpr_achievement(results):
-    st.subheader(":blue-background[👈 Will FPR be achieved from this pay deal? 🕵️]")
-    fpr_achieved = all(result["FPR Progress"][-1] >= 100 for result in results)
-    
-    if fpr_achieved:
-        st.success("Yes, FPR will be achieved for all nodal points.")
-    else:
-        st.error("No, FPR will not be achieved for all nodal points. But some progress has been made...  \nNote the residual pay erosion figures in % below.")
+    # Add header for the metrics section
+    st.subheader("📊 Current Pay Erosion vs FPR Progress")
+    st.write("**Current Pay Erosion** (large numbers): How much purchasing power has been lost since baseline")
+    st.write("**FPR Progress** (green arrows): How much of Full Pay Restoration this deal achieves")
     
     # Display detailed FPR progress for each nodal point using st.metric
     cols = st.columns(len(results))
     for i, result in enumerate(results):
         with cols[i]:
             fpr_progress = result["FPR Progress"][-1]
-            pay_erosion = result["Real Terms Pay Cuts"][-1]
             
-            # Format pay erosion as a percentage with reversed polarity
-            pay_erosion_formatted = f"{pay_erosion * 100:.2f}%"
+            # Get the current pay erosion from FPR targets (same calculation as sidebar)
+            nodal_name = result["Nodal Point"]
+            if nodal_name in st.session_state.fpr_targets:
+                fpr_target = st.session_state.fpr_targets[nodal_name]
+                fpr_decimal = fpr_target / 100
+                current_pay_erosion_percent = (1 - 1/(1 + fpr_decimal)) * 100
+                current_pay_erosion_formatted = f"-{current_pay_erosion_percent:.1f}%"
+            else:
+                current_pay_erosion_formatted = "Calculating..."
             
             # Format FPR progress for delta
             fpr_progress_formatted = f"FPR: {fpr_progress:.2f}%"
             
             st.metric(
                 label=f"{result['Nodal Point']}",
-                value=pay_erosion_formatted,
+                value=current_pay_erosion_formatted,
                 delta=fpr_progress_formatted,
                 delta_color="normal"  # This ensures the delta is green for positive values
             )
@@ -911,84 +974,9 @@ def main():
     unsafe_allow_html=True,
     )  
 
-    st.title("DoctorsVote MYPD-FPR Modeller 2025/2026")
+    st.title("MYPD-FPR Modeller 2025/2026")
     st.write("This app is best used on a desktop/laptop. Adjust settings in the sidebar.")
-    # Add the introduction and explanations
-    with st.expander("About This App", expanded=False):
-        st.markdown("""
-        ## Introduction
-
-        Welcome to the DoctorsVote Multi-Year Pay Deal (MYPD) and Full Pay Restoration (FPR) Modeller. This sophisticated tool is designed to help medical professionals, union representatives, and policymakers understand and visualize the complex interplay between pay deals, inflation, and the goal of full pay restoration for doctors in the UK.
-
-        The modeller allows you to:
-
-        1. Input and adjust parameters for multi-year pay deals
-        2. Visualize the progression of pay and its relation to inflation over time
-        3. Track the progress towards Full Pay Restoration (FPR) for different nodal points
-        4. Calculate and display the costs associated with proposed pay deals
-
-        ## How It Works
-
-        ### Sidebar Controls
-
-        The sidebar on the left contains all the input controls for the model:
-
-        1. **Inflation Measure**: Choose between RPI (Retail Price Index) and CPI (Consumer Price Index) as the basis for calculations.
-        2. **FPR Start and End Years**: Select the range of years over which to calculate the Full Pay Restoration target.
-        3. **Number of Years**: Set the duration of the pay deal you want to model.
-        4. **Doctor Counts**: Input the number of doctors at each nodal point for accurate cost calculations.
-        5. **Year-by-Year Inputs**: For each year of the deal, you can set:
-           - Consolidated pay offers (in pounds)
-           - Percentage pay rises
-           - Projected inflation rates
-
-        ### Main Display
-
-        The main area of the app displays the results of your inputs:
-
-        1. **FPR Achievement**: A summary of whether the proposed deal achieves Full Pay Restoration, with a breakdown by nodal point.
-        2. **Pay Progression & FPR Progress Visualization**: Interactive charts showing:
-           - Nominal and real pay progression
-           - FPR progress over time
-           - Pay erosion due to inflation
-        3. **Pay Increase Curve**: A chart displaying nominal increases, real increases, and cumulative costs over the years of the deal.
-        4. **Cost Breakdown**: Detailed yearly costs, including basic pay, pension contributions, and additional hours.
-        5. **Full Results Table**: A comprehensive table with all calculated metrics for each nodal point.
-
-        ## Key Concepts
-
-        ### Full Pay Restoration (FPR)
-        
-        FPR represents the goal of restoring doctors' pay to what it would have been if it had kept pace with inflation since a chosen baseline year. The FPR target is calculated based on the cumulative effect of inflation between the start and end years you select.
-        
-        This updated version for 2025/2026 includes the actual pay awards from 2023/2024 and 2024/2025, which were nodal-specific:
-        - 2023/2024: 3.71% for N1, 3.71% for N2, 5.05% for N3, 3.71% for N4, and 3.71% for N5
-        - 2024/2025: 9.0% for N1, 8.6% for N2, 8.2% for N3, 7.7% for N4, and 7.5% for N5
-        - 2025/2026 (current offer): 6.0% for N1, 5.8% for N2, 5.5% for N3, 5.2% for N4, and 5.1% for N5
-
-        ### Pay Erosion
-
-        Pay erosion occurs when pay increases fail to keep up with inflation, resulting in a decrease in real-terms pay. The modeller calculates and displays pay erosion as a percentage, showing how much the value of pay has decreased relative to inflation.
-
-        ### Nodal Points
-
-        The model uses five nodal points representing different stages in a doctor's career. Each nodal point has its own base pay and progression, allowing for a nuanced view of how pay deals affect doctors at different career stages.
-
-        ### Real vs Nominal Increases
-
-        - **Nominal Increases**: The actual percentage or pound value increase in pay.
-        - **Real Increases**: The increase in pay after accounting for inflation, representing the true change in purchasing power.
-
-        ## Using the Model
-
-        1. Start by setting your desired parameters in the sidebar.
-        2. Observe the "FPR Achievement" section to see if the proposed deal meets the FPR targets.
-        3. Use the visualizations to understand how pay progresses over time and how it compares to inflation.
-        4. Examine the cost breakdown to understand the financial implications of the proposed deal.
-        5. Adjust your inputs and observe how changes affect the outcomes.
-
-        This model is a powerful tool for understanding the long-term implications of pay deals and their progress towards restoring doctors' pay. By providing a clear, data-driven view of complex pay scenarios, it aims to facilitate informed discussions and decision-making in pay negotiations.
-        """)
+    st.divider()
 
     inflation_type, fpr_start_year, fpr_end_year, num_years, fpr_percentages, doctor_counts, year_inputs, additional_hours, out_of_hours = setup_sidebar()
 
