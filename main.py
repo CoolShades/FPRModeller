@@ -22,11 +22,11 @@ AVAILABLE_YEARS = [
 # Nodal-specific pay awards for recent years
 NODAL_SPECIFIC_PAY_AWARDS = {
     "2023/2024": {
-        "Nodal 1": 0.0371,
-        "Nodal 2": 0.0371,
-        "Nodal 3": 0.0505,
-        "Nodal 4": 0.0371,
-        "Nodal 5": 0.0371
+        "Nodal 1": 0.1401,
+        "Nodal 2": 0.1341,
+        "Nodal 3": 0.1415,
+        "Nodal 4": 0.1221,
+        "Nodal 5": 0.1181
     },
     "2024/2025": {
         "Nodal 1": 0.0900,
