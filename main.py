@@ -257,14 +257,47 @@ def update_global_pay_rise_for_inflation():
     """Update global pay rise default based on inflation type"""
     if st.session_state.inflation_type == "RPI":
         st.session_state.global_pay_rise = 9.96
+        # Update global inflation to match RPI-appropriate value
+        st.session_state.global_inflation = 4.5
+        # Update 2025/26 values if not customized
+        if 'rpi_2025_26' not in st.session_state or st.session_state.rpi_2025_26 == st.session_state.get('cpi_2025_26', 3.5) or st.session_state.rpi_2025_26 == st.session_state.get('cpih_2025_26', 4.1):
+            st.session_state.rpi_2025_26 = 4.5
     elif st.session_state.inflation_type == "CPI":
         st.session_state.global_pay_rise = 4.3
+        # Update global inflation to match CPI-appropriate value
+        st.session_state.global_inflation = 3.5
+        # Update 2025/26 values if not customized
+        if 'cpi_2025_26' not in st.session_state or st.session_state.cpi_2025_26 == st.session_state.get('rpi_2025_26', 4.5) or st.session_state.cpi_2025_26 == st.session_state.get('cpih_2025_26', 4.1):
+            st.session_state.cpi_2025_26 = 3.5
     else:  # CPIH
         st.session_state.global_pay_rise = 7.1
+        # Update global inflation to match CPIH-appropriate value
+        st.session_state.global_inflation = 4.1
+        # Update 2025/26 values if not customized
+        if 'cpih_2025_26' not in st.session_state or st.session_state.cpih_2025_26 == st.session_state.get('rpi_2025_26', 4.5) or st.session_state.cpih_2025_26 == st.session_state.get('cpi_2025_26', 3.5):
+            st.session_state.cpih_2025_26 = 4.1
     
     # Also update individual year settings if they exist
     if 'num_years' in st.session_state:
         for year in range(1, st.session_state.num_years + 1):
+            # Update all inflation type values for each year to match appropriate defaults
+            if f"rpi_{year}" not in st.session_state:
+                st.session_state[f"rpi_{year}"] = 4.5
+            if f"cpi_{year}" not in st.session_state:
+                st.session_state[f"cpi_{year}"] = 3.5
+            if f"cpih_{year}" not in st.session_state:
+                st.session_state[f"cpih_{year}"] = 4.1
+            
+            # Update the active inflation type to match global setting
+            if st.session_state.inflation_type == "RPI":
+                st.session_state[f"rpi_{year}"] = st.session_state.global_inflation
+            elif st.session_state.inflation_type == "CPI":
+                st.session_state[f"cpi_{year}"] = st.session_state.global_inflation
+            else:  # CPIH
+                st.session_state[f"cpih_{year}"] = st.session_state.global_inflation
+            
+            st.session_state[f"inflation_{year}"] = st.session_state.global_inflation
+            
             # Update nodal percentages for each year
             if f"nodal_percentages_{year}" in st.session_state:
                 for name, _, _ in NODAL_POINTS:
@@ -373,13 +406,20 @@ def setup_sidebar():
 def update_global_settings():
     for year in range(1, st.session_state.num_years + 1):
         st.session_state[f"inflation_{year}"] = st.session_state.global_inflation
+        # Also update individual inflation type values for consistency
+        st.session_state[f"rpi_{year}"] = st.session_state.global_inflation
+        st.session_state[f"cpi_{year}"] = st.session_state.global_inflation
+        st.session_state[f"cpih_{year}"] = st.session_state.global_inflation
         for name, _, _ in NODAL_POINTS:
             st.session_state[f"mypd_nodal_percentage_{name}_{year}"] = st.session_state.global_pay_rise
 
 def check_individual_changes():
     for year in range(1, st.session_state.num_years + 1):
-        if f"inflation_{year}" in st.session_state and st.session_state[f"inflation_{year}"] != st.session_state.global_inflation:
-            return True
+        # Check if any of the inflation type values differ from global settings
+        inflation_keys = [f"rpi_{year}", f"cpi_{year}", f"cpih_{year}"]
+        for key in inflation_keys:
+            if key in st.session_state and st.session_state[key] != st.session_state.global_inflation:
+                return True
         for name, _, _ in NODAL_POINTS:
             if f"mypd_nodal_percentage_{name}_{year}" in st.session_state and st.session_state[f"mypd_nodal_percentage_{name}_{year}"] != st.session_state.global_pay_rise:
                 return True
@@ -396,6 +436,15 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
             st.session_state[f"pound_increases_{year}"] = {name: 0 for name, _, _ in NODAL_POINTS}
         if f"inflation_{year}" not in st.session_state:
             st.session_state[f"inflation_{year}"] = 0.033 if year == 0 else st.session_state.global_inflation
+        
+        # Initialize individual inflation type values for future years
+        if year > 0:
+            if f"rpi_{year}" not in st.session_state:
+                st.session_state[f"rpi_{year}"] = st.session_state.global_inflation
+            if f"cpi_{year}" not in st.session_state:
+                st.session_state[f"cpi_{year}"] = st.session_state.global_inflation
+            if f"cpih_{year}" not in st.session_state:
+                st.session_state[f"cpih_{year}"] = st.session_state.global_inflation
 
     for year in range(num_years + 1):
         if year == 0:
@@ -492,19 +541,58 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                         ) / 100
         else:
             with st.sidebar.expander(f"Year {year} ({2025+year}/{2026+year})"):
+                # Initialize individual inflation type values with same default
+                if f"rpi_{year}" not in st.session_state:
+                    st.session_state[f"rpi_{year}"] = st.session_state.global_inflation
+                if f"cpi_{year}" not in st.session_state:
+                    st.session_state[f"cpi_{year}"] = st.session_state.global_inflation
+                if f"cpih_{year}" not in st.session_state:
+                    st.session_state[f"cpih_{year}"] = st.session_state.global_inflation
+                
                 year_input = {
                     "nodal_percentages": {},
                     "pound_increases": {},
-                    "inflation": st.slider(
-                        f"Projected Inflation for Year {year} ({2025+year}/{2026+year}) (%)",
-                        min_value=0.0,
-                        max_value=10.0,
-                        value=st.session_state[f"inflation_{year}"],
-                        step=0.1,
-                        key=f"inflation_{year}",
-                        on_change=check_individual_changes
-                    ) / 100
+                    "rpi": st.session_state[f"rpi_{year}"] / 100,
+                    "cpi": st.session_state[f"cpi_{year}"] / 100,
+                    "cpih": st.session_state[f"cpih_{year}"] / 100,
                 }
+                
+                # Add UI control for inflation rate based on selected type
+                st.subheader(f"Projected Inflation for Year {year} ({2025+year}/{2026+year})")
+                
+                if inflation_type == "RPI":
+                    rpi = st.slider(f"RPI Inflation Rate (%)",
+                                  min_value=0.0,
+                                  max_value=10.0,
+                                  value=st.session_state[f"rpi_{year}"],
+                                  step=0.1,
+                                  key=f"rpi_{year}",
+                                  on_change=check_individual_changes,
+                                  help=f"Set the projected RPI inflation rate for {2025+year}/{2026+year}")
+                    year_input["rpi"] = rpi / 100
+                    year_input["inflation"] = rpi / 100
+                elif inflation_type == "CPI":
+                    cpi = st.slider(f"CPI Inflation Rate (%)",
+                                  min_value=0.0,
+                                  max_value=10.0,
+                                  value=st.session_state[f"cpi_{year}"],
+                                  step=0.1,
+                                  key=f"cpi_{year}",
+                                  on_change=check_individual_changes,
+                                  help=f"Set the projected CPI inflation rate for {2025+year}/{2026+year}")
+                    year_input["cpi"] = cpi / 100
+                    year_input["inflation"] = cpi / 100
+                else:  # CPIH
+                    cpih = st.slider(f"CPIH Inflation Rate (%)",
+                                   min_value=0.0,
+                                   max_value=10.0,
+                                   value=st.session_state[f"cpih_{year}"],
+                                   step=0.1,
+                                   key=f"cpih_{year}",
+                                   on_change=check_individual_changes,
+                                   help=f"Set the projected CPIH inflation rate for {2025+year}/{2026+year}")
+                    year_input["cpih"] = cpih / 100
+                    year_input["inflation"] = cpih / 100
                 
                 st.write("Consolidated pay offer:")
                 cols = st.columns(5)
