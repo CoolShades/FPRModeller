@@ -97,24 +97,24 @@ def calculate_new_pay_erosion(current_erosion, real_terms_change):
 def calculate_fpr_percentage(start_year, end_year, inflation_type, nodal_point=None, year_inputs=None):
     # Base pay data from the provided tables
     pay_data = [
-        {"year": "2008/2009", "pay_award": 0.0, "rpi": 0.0, "cpi": 0.0},  # Baseline year
-        {"year": "2009/2010", "pay_award": 0.015, "rpi": 0.053, "cpi": 0.037},
-        {"year": "2010/2011", "pay_award": 0.010, "rpi": 0.052, "cpi": 0.045},
-        {"year": "2011/2012", "pay_award": 0.000, "rpi": 0.035, "cpi": 0.030},
-        {"year": "2012/2013", "pay_award": 0.000, "rpi": 0.029, "cpi": 0.024},
-        {"year": "2013/2014", "pay_award": 0.010, "rpi": 0.025, "cpi": 0.018},
-        {"year": "2014/2015", "pay_award": 0.000, "rpi": 0.009, "cpi": -0.001},
-        {"year": "2015/2016", "pay_award": 0.000, "rpi": 0.013, "cpi": 0.003},
-        {"year": "2016/2017", "pay_award": 0.010, "rpi": 0.035, "cpi": 0.027},
-        {"year": "2017/2018", "pay_award": 0.010, "rpi": 0.034, "cpi": 0.024},
-        {"year": "2018/2019", "pay_award": 0.020, "rpi": 0.030, "cpi": 0.021},
-        {"year": "2019/2020", "pay_award": 0.023, "rpi": 0.015, "cpi": 0.008},
-        {"year": "2020/2021", "pay_award": 0.030, "rpi": 0.029, "cpi": 0.015},
-        {"year": "2021/2022", "pay_award": 0.030, "rpi": 0.111, "cpi": 0.090},
-        {"year": "2022/2023", "pay_award": 0.030, "rpi": 0.114, "cpi": 0.087},
-        {"year": "2023/2024", "pay_award": None, "rpi": 0.033, "cpi": 0.023}, # Will use nodal-specific values
-        {"year": "2024/2025", "pay_award": None, "rpi": 0.045, "cpi": 0.035}, # Will use nodal-specific values
-        {"year": "2025/2026", "pay_award": None, "rpi": 0.045, "cpi": 0.035}
+        {"year": "2008/2009", "pay_award": 0.0, "rpi": 0.0, "cpi": 0.0, "cpih": 0.0},  # Baseline year
+        {"year": "2009/2010", "pay_award": 0.015, "rpi": 0.053, "cpi": 0.037, "cpih": 0.027},
+        {"year": "2010/2011", "pay_award": 0.010, "rpi": 0.052, "cpi": 0.045, "cpih": 0.038},
+        {"year": "2011/2012", "pay_award": 0.000, "rpi": 0.035, "cpi": 0.030, "cpih": 0.028},
+        {"year": "2012/2013", "pay_award": 0.000, "rpi": 0.029, "cpi": 0.024, "cpih": 0.022},
+        {"year": "2013/2014", "pay_award": 0.010, "rpi": 0.025, "cpi": 0.018, "cpih": 0.017},
+        {"year": "2014/2015", "pay_award": 0.000, "rpi": 0.009, "cpi": -0.001, "cpih": 0.003},
+        {"year": "2015/2016", "pay_award": 0.000, "rpi": 0.013, "cpi": 0.003, "cpih": 0.007},
+        {"year": "2016/2017", "pay_award": 0.010, "rpi": 0.035, "cpi": 0.027, "cpih": 0.026},
+        {"year": "2017/2018", "pay_award": 0.010, "rpi": 0.034, "cpi": 0.024, "cpih": 0.022},
+        {"year": "2018/2019", "pay_award": 0.020, "rpi": 0.030, "cpi": 0.021, "cpih": 0.020},
+        {"year": "2019/2020", "pay_award": 0.023, "rpi": 0.015, "cpi": 0.008, "cpih": 0.009},
+        {"year": "2020/2021", "pay_award": 0.030, "rpi": 0.029, "cpi": 0.015, "cpih": 0.016},
+        {"year": "2021/2022", "pay_award": 0.030, "rpi": 0.111, "cpi": 0.090, "cpih": 0.078},
+        {"year": "2022/2023", "pay_award": 0.030, "rpi": 0.114, "cpi": 0.087, "cpih": 0.078},
+        {"year": "2023/2024", "pay_award": None, "rpi": 0.033, "cpi": 0.023, "cpih": 0.030}, # Will use nodal-specific values
+        {"year": "2024/2025", "pay_award": None, "rpi": 0.045, "cpi": 0.035, "cpih": 0.041}, # Will use nodal-specific values
+        {"year": "2025/2026", "pay_award": None, "rpi": 0.045, "cpi": 0.035, "cpih": 0.041}
     ]
     
     # If a nodal point is specified, use nodal-specific pay awards for 2023/2024, 2024/2025, and 2025/2026
@@ -140,7 +140,12 @@ def calculate_fpr_percentage(start_year, end_year, inflation_type, nodal_point=N
     end_index = next((i for i, data in enumerate(pay_data) if data["year"] == end_year), len(pay_data))
     cumulative_effect = 1.0
     
-    inflation_key = "rpi" if inflation_type == "RPI" else "cpi"
+    if inflation_type == "RPI":
+        inflation_key = "rpi"
+    elif inflation_type == "CPI":
+        inflation_key = "cpi"
+    else:  # CPIH
+        inflation_key = "cpih"
     
     for data in pay_data[start_index:end_index]:
         inflation_rate = data[inflation_key]
@@ -150,8 +155,10 @@ def calculate_fpr_percentage(start_year, end_year, inflation_type, nodal_point=N
             # Get the first year_input (index 0) which corresponds to 2025/2026
             if inflation_key == "rpi":
                 inflation_rate = year_inputs[0]["rpi"]
-            else:  # CPI
+            elif inflation_key == "cpi":
                 inflation_rate = year_inputs[0]["cpi"]
+            else:  # CPIH
+                inflation_rate = year_inputs[0]["cpih"]
         
         if inflation_rate == 0.0 or inflation_rate is None:  # Skip years with no inflation data
             continue
@@ -198,8 +205,10 @@ def initialize_session_state():
         # Set default based on inflation type
         if st.session_state.inflation_type == "RPI":
             st.session_state.global_pay_rise = 9.96
-        else:  # CPI
+        elif st.session_state.inflation_type == "CPI":
             st.session_state.global_pay_rise = 4.3
+        else:  # CPIH
+            st.session_state.global_pay_rise = 7.1
     if 'num_years' not in st.session_state:
         st.session_state.num_years = 2  # Default to 2 years
     
@@ -211,10 +220,20 @@ def update_fpr_targets(year_inputs=None):
         # Create default year_inputs with 2025/26 inflation values
         default_rpi = 4.5 / 100  # 4.5% RPI
         default_cpi = 3.5 / 100  # 3.5% CPI
+        default_cpih = 4.1 / 100  # 4.1% CPIH
+        
+        if st.session_state.inflation_type == "RPI":
+            default_inflation = default_rpi
+        elif st.session_state.inflation_type == "CPI":
+            default_inflation = default_cpi
+        else:  # CPIH
+            default_inflation = default_cpih
+            
         year_inputs = [{
             "rpi": default_rpi,
             "cpi": default_cpi,
-            "inflation": default_rpi if st.session_state.inflation_type == "RPI" else default_cpi
+            "cpih": default_cpih,
+            "inflation": default_inflation
         }]
     
     st.session_state.fpr_targets = {
@@ -238,8 +257,10 @@ def update_global_pay_rise_for_inflation():
     """Update global pay rise default based on inflation type"""
     if st.session_state.inflation_type == "RPI":
         st.session_state.global_pay_rise = 9.96
-    else:  # CPI
+    elif st.session_state.inflation_type == "CPI":
         st.session_state.global_pay_rise = 4.3
+    else:  # CPIH
+        st.session_state.global_pay_rise = 7.1
     
     # Also update individual year settings if they exist
     if 'num_years' in st.session_state:
@@ -258,7 +279,7 @@ def setup_sidebar():
     
     st.sidebar.title("Modeller Settings ⚙️")
     
-    inflation_type = st.sidebar.radio("Select inflation measure:", ("RPI", "CPI"), key="inflation_type", on_change=lambda: [update_fpr_targets(), update_global_pay_rise_for_inflation()], horizontal=True)
+    inflation_type = st.sidebar.radio("Select inflation measure:", ("RPI", "CPI", "CPIH"), key="inflation_type", on_change=lambda: [update_fpr_targets(), update_global_pay_rise_for_inflation()], horizontal=True)
     
     col1, col2, col3 = st.sidebar.columns(3)
     with col1:
@@ -386,6 +407,8 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                     st.session_state.rpi_2025_26 = 4.5  # Default 4.5% as requested
                 if 'cpi_2025_26' not in st.session_state:
                     st.session_state.cpi_2025_26 = 3.5  # Default 3.5% as requested
+                if 'cpih_2025_26' not in st.session_state:
+                    st.session_state.cpih_2025_26 = 4.1  # Default 4.1% as requested
                 
                 # Create year_input with correct inflation values
                 year_input = {
@@ -393,7 +416,8 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                     "pound_increases": {},
                     "rpi": st.session_state.rpi_2025_26 / 100,
                     "cpi": st.session_state.cpi_2025_26 / 100,
-                    "inflation": st.session_state.rpi_2025_26 / 100 if inflation_type == "RPI" else st.session_state.cpi_2025_26 / 100
+                    "cpih": st.session_state.cpih_2025_26 / 100,
+                    "inflation": st.session_state.rpi_2025_26 / 100 if inflation_type == "RPI" else (st.session_state.cpi_2025_26 / 100 if inflation_type == "CPI" else st.session_state.cpih_2025_26 / 100)
                 }
                 
                 # Add UI control for inflation rate based on selected type
@@ -411,7 +435,7 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                     # Update both RPI and inflation values
                     year_input["rpi"] = rpi / 100
                     year_input["inflation"] = rpi / 100
-                else:
+                elif inflation_type == "CPI":
                     # Show only CPI slider when CPI is selected
                     cpi = st.slider("CPI Inflation Rate (%)",
                                   min_value=0.0,
@@ -423,6 +447,18 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                     # Update both CPI and inflation values
                     year_input["cpi"] = cpi / 100
                     year_input["inflation"] = cpi / 100
+                else:  # CPIH
+                    # Show only CPIH slider when CPIH is selected
+                    cpih = st.slider("CPIH Inflation Rate (%)",
+                                   min_value=0.0,
+                                   max_value=10.0,
+                                   value=st.session_state.cpih_2025_26,
+                                   step=0.1,
+                                   key="cpih_2025_26",
+                                   help="Set the projected CPIH inflation rate for 2025/26")
+                    # Update both CPIH and inflation values
+                    year_input["cpih"] = cpih / 100
+                    year_input["inflation"] = cpih / 100
                 
                 st.write("Consolidated pay offer:")
                 cols = st.columns(5)
