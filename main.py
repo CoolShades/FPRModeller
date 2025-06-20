@@ -165,7 +165,7 @@ def calculate_fpr_percentage(start_year, end_year, inflation_type, nodal_point=N
         real_terms_change = ((1 + data["pay_award"]) / (1 + inflation_rate)) - 1
         cumulative_effect *= (1 + real_terms_change)
     
-    fpr_percentage = (1 - cumulative_effect) * 100
+    fpr_percentage = (1/cumulative_effect - 1) * 100  # Correct calculation for restoration
     return fpr_percentage
 
 def calculate_weighted_average(percentages, doctor_counts):
