@@ -721,21 +721,21 @@ def display_cost_breakdown(results, year_inputs, additional_hours, out_of_hours)
     st.subheader("Cost Breakdown by Year")
     
     num_years = len(year_inputs)
-    # Create tabs for all years including Year 0
-    if num_years > 0:
-        tabs = st.tabs([f"Year {year}: {2025 + year}/{2026 + year}" for year in range(num_years)])
+    # Create tabs only for Years 1+ (exclude Year 0)
+    if num_years > 1:
+        tabs = st.tabs([f"Year {year}: {2025 + year}/{2026 + year}" for year in range(1, num_years)])
     else:
-        st.write("No years configured for cost breakdown.")
+        st.write("No future years configured for cost breakdown.")
         return
     
-    # Initialize cumulative totals - EXCLUDING Year 0 as requested
+    # Initialize cumulative totals
     cumulative_cost = 0
     cumulative_net_cost = 0
     cumulative_tax_recouped = 0
     
-    # Display tabs for all years
+    # Display tabs only for Years 1+
     for tab_index, tab in enumerate(tabs):
-        year = tab_index  # Include Year 0 in display
+        year = tab_index + 1  # Start from Year 1 (skip Year 0)
         with tab:
             cost_data = []
             year_total = 0
@@ -777,11 +777,10 @@ def display_cost_breakdown(results, year_inputs, additional_hours, out_of_hours)
             
             st.dataframe(df.style.set_properties(**{'text-align': 'right'}))
             
-            # Only add to cumulative totals for Years 1+ (exclude Year 0)
-            if year > 0:
-                cumulative_cost += year_total
-                cumulative_net_cost += year_net_total
-                cumulative_tax_recouped += year_tax_recouped
+            # Add all displayed years to cumulative totals (all are Years 1+)
+            cumulative_cost += year_total
+            cumulative_net_cost += year_net_total
+            cumulative_tax_recouped += year_tax_recouped
             
             col1, col2 = st.columns(2)
             with col1:
