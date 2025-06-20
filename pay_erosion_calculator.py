@@ -3,7 +3,7 @@ Pay Erosion Calculator - Detailed Year-by-Year Analysis
 This script calculates and displays detailed pay erosion analysis for all nodal points
 """
 
-# Constants - same as in main.py
+# Constants
 NODAL_POINTS = [
     ("Nodal 1", 36616, 38831),  # Current pay, Offered pay
     ("Nodal 2", 42008, 44439),  # Current pay, Offered pay
