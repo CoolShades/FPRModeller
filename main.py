@@ -44,6 +44,22 @@ NODAL_SPECIFIC_PAY_AWARDS = {
     }
 }
 
+# Default nodal percentages for MYPD years based on inflation type
+DEFAULT_NODAL_PERCENTAGES = {
+    "RPI": {
+        1: {"Nodal 1": 9.0, "Nodal 2": 9.5, "Nodal 3": 9.0, "Nodal 4": 10.0, "Nodal 5": 11.0},
+        2: {"Nodal 1": 8.1, "Nodal 2": 8.9, "Nodal 3": 9.4, "Nodal 4": 11.1, "Nodal 5": 10.9}
+    },
+    "CPI": {
+        1: {"Nodal 1": 0.0, "Nodal 2": 0.5, "Nodal 3": 0.5, "Nodal 4": 2.0, "Nodal 5": 2.0},
+        2: {"Nodal 1": 0.0, "Nodal 2": 0.0, "Nodal 3": 0.0, "Nodal 4": 1.0, "Nodal 5": 1.7}
+    },
+    "CPIH": {
+        1: {"Nodal 1": 0.0, "Nodal 2": 0.0, "Nodal 3": 0.0, "Nodal 4": 0.7, "Nodal 5": 1.4},
+        2: {"Nodal 1": 0.0, "Nodal 2": 0.0, "Nodal 3": 0.0, "Nodal 4": 0.0, "Nodal 5": 0.0}
+    }
+}
+
 # Tax and NI calculation functions
 def calculate_pension_contribution(basic_pay):
     # Pension cost is 23.7% of basic pay (without additional hours and out-of-hours)
@@ -263,14 +279,28 @@ def update_global_pay_rise_for_inflation():
     # Also update individual year settings if they exist
     if 'num_years' in st.session_state:
         for year in range(1, st.session_state.num_years + 1):
-            # Update nodal percentages for each year
+            # Update nodal percentages for each year using inflation-type-specific defaults
             if f"nodal_percentages_{year}" in st.session_state:
-                for name, _, _ in NODAL_POINTS:
-                    st.session_state[f"nodal_percentages_{year}"][name] = st.session_state.global_pay_rise
+                if year <= 2 and year in DEFAULT_NODAL_PERCENTAGES.get(st.session_state.inflation_type, {}):
+                    # Use inflation-type-specific defaults for Years 1-2
+                    defaults = DEFAULT_NODAL_PERCENTAGES[st.session_state.inflation_type][year]
+                    for name, _, _ in NODAL_POINTS:
+                        st.session_state[f"nodal_percentages_{year}"][name] = defaults.get(name, st.session_state.global_pay_rise)
+                else:
+                    # Use global pay rise for Years 3+
+                    for name, _, _ in NODAL_POINTS:
+                        st.session_state[f"nodal_percentages_{year}"][name] = st.session_state.global_pay_rise
+            
             # Update individual year controls
             for name, _, _ in NODAL_POINTS:
                 if f"mypd_nodal_percentage_{name}_{year}" in st.session_state:
-                    st.session_state[f"mypd_nodal_percentage_{name}_{year}"] = st.session_state.global_pay_rise
+                    if year <= 2 and year in DEFAULT_NODAL_PERCENTAGES.get(st.session_state.inflation_type, {}):
+                        # Use inflation-type-specific defaults for Years 1-2
+                        default_value = DEFAULT_NODAL_PERCENTAGES[st.session_state.inflation_type][year].get(name, st.session_state.global_pay_rise)
+                        st.session_state[f"mypd_nodal_percentage_{name}_{year}"] = default_value
+                    else:
+                        # Use global pay rise for Years 3+
+                        st.session_state[f"mypd_nodal_percentage_{name}_{year}"] = st.session_state.global_pay_rise
 
 def setup_sidebar():
     initialize_session_state()
@@ -372,7 +402,12 @@ def update_global_settings():
     for year in range(1, st.session_state.num_years + 1):
         st.session_state[f"inflation_{year}"] = st.session_state.global_inflation
         for name, _, _ in NODAL_POINTS:
-            st.session_state[f"mypd_nodal_percentage_{name}_{year}"] = st.session_state.global_pay_rise
+            # Use inflation-type-specific defaults for Years 1-2, global pay rise for Years 3+
+            if year <= 2 and year in DEFAULT_NODAL_PERCENTAGES.get(st.session_state.inflation_type, {}):
+                default_value = DEFAULT_NODAL_PERCENTAGES[st.session_state.inflation_type][year].get(name, st.session_state.global_pay_rise)
+                st.session_state[f"mypd_nodal_percentage_{name}_{year}"] = default_value
+            else:
+                st.session_state[f"mypd_nodal_percentage_{name}_{year}"] = st.session_state.global_pay_rise
 
 def check_individual_changes():
     for year in range(1, st.session_state.num_years + 1):
@@ -389,7 +424,16 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
     # Initialize session state for all years
     for year in range(num_years + 1):
         if f"nodal_percentages_{year}" not in st.session_state:
-            st.session_state[f"nodal_percentages_{year}"] = {name: 0.0 if year == 0 else st.session_state.global_pay_rise for name, _, _ in NODAL_POINTS}
+            if year == 0:
+                # Year 0 (Additional offer) - keep at 0.0
+                st.session_state[f"nodal_percentages_{year}"] = {name: 0.0 for name, _, _ in NODAL_POINTS}
+            elif year <= 2 and year in DEFAULT_NODAL_PERCENTAGES.get(inflation_type, {}):
+                # Years 1-2: Use inflation-type-specific defaults
+                defaults = DEFAULT_NODAL_PERCENTAGES[inflation_type][year]
+                st.session_state[f"nodal_percentages_{year}"] = {name: defaults.get(name, st.session_state.global_pay_rise) for name, _, _ in NODAL_POINTS}
+            else:
+                # Years 3+: Use global pay rise
+                st.session_state[f"nodal_percentages_{year}"] = {name: st.session_state.global_pay_rise for name, _, _ in NODAL_POINTS}
         if f"pound_increases_{year}" not in st.session_state:
             st.session_state[f"pound_increases_{year}"] = {name: 0 for name, _, _ in NODAL_POINTS}
         if f"inflation_{year}" not in st.session_state:
@@ -528,11 +572,17 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                 cols = st.columns(5)
                 for i, (name, _, _) in enumerate(NODAL_POINTS):
                     with cols[i]:
+                        # Use inflation-type-specific defaults for Years 1-2
+                        if year <= 2 and year in DEFAULT_NODAL_PERCENTAGES.get(inflation_type, {}):
+                            default_value = DEFAULT_NODAL_PERCENTAGES[inflation_type][year].get(name, st.session_state.global_pay_rise)
+                        else:
+                            default_value = st.session_state[f"nodal_percentages_{year}"][name]
+                        
                         year_input["nodal_percentages"][name] = st.number_input(
                             f"{name} (%)",
                             min_value=0.0,
                             max_value=30.0,
-                            value=st.session_state[f"nodal_percentages_{year}"][name],
+                            value=default_value,
                             step=0.1,
                             format="%.1f",
                             key=f"mypd_nodal_percentage_{name}_{year}",
