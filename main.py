@@ -114,23 +114,23 @@ def calculate_fpr_percentage(start_year, end_year, inflation_type, nodal_point=N
     # Base pay data from the provided tables
     pay_data = [
         {"year": "2008/2009", "pay_award": 0.0, "rpi": 0.0, "cpi": 0.0, "cpih": 0.0},  # Baseline year
-        {"year": "2009/2010", "pay_award": 0.015, "rpi": 0.053, "cpi": 0.037, "cpih": 0.027},
-        {"year": "2010/2011", "pay_award": 0.010, "rpi": 0.052, "cpi": 0.045, "cpih": 0.038},
-        {"year": "2011/2012", "pay_award": 0.000, "rpi": 0.035, "cpi": 0.030, "cpih": 0.028},
-        {"year": "2012/2013", "pay_award": 0.000, "rpi": 0.029, "cpi": 0.024, "cpih": 0.022},
-        {"year": "2013/2014", "pay_award": 0.010, "rpi": 0.025, "cpi": 0.018, "cpih": 0.017},
-        {"year": "2014/2015", "pay_award": 0.000, "rpi": 0.009, "cpi": -0.001, "cpih": 0.003},
-        {"year": "2015/2016", "pay_award": 0.000, "rpi": 0.013, "cpi": 0.003, "cpih": 0.007},
-        {"year": "2016/2017", "pay_award": 0.010, "rpi": 0.035, "cpi": 0.027, "cpih": 0.026},
-        {"year": "2017/2018", "pay_award": 0.010, "rpi": 0.034, "cpi": 0.024, "cpih": 0.022},
-        {"year": "2018/2019", "pay_award": 0.020, "rpi": 0.030, "cpi": 0.021, "cpih": 0.020},
-        {"year": "2019/2020", "pay_award": 0.023, "rpi": 0.015, "cpi": 0.008, "cpih": 0.009},
-        {"year": "2020/2021", "pay_award": 0.030, "rpi": 0.029, "cpi": 0.015, "cpih": 0.016},
-        {"year": "2021/2022", "pay_award": 0.030, "rpi": 0.111, "cpi": 0.090, "cpih": 0.078},
-        {"year": "2022/2023", "pay_award": 0.030, "rpi": 0.114, "cpi": 0.087, "cpih": 0.078},
-        {"year": "2023/2024", "pay_award": None, "rpi": 0.033, "cpi": 0.023, "cpih": 0.030}, # Will use nodal-specific values
-        {"year": "2024/2025", "pay_award": None, "rpi": 0.045, "cpi": 0.035, "cpih": 0.041}, # Will use nodal-specific values
-        {"year": "2025/2026", "pay_award": None, "rpi": 0.045, "cpi": 0.035, "cpih": 0.041}
+        {"year": "2009/2010", "pay_award": 0.015, "rpi": 0.053, "cpi": 0.037, "cpih": 0.016},
+        {"year": "2010/2011", "pay_award": 0.010, "rpi": 0.052, "cpi": 0.045, "cpih": 0.022},
+        {"year": "2011/2012", "pay_award": 0.000, "rpi": 0.035, "cpi": 0.030, "cpih": 0.015},
+        {"year": "2012/2013", "pay_award": 0.000, "rpi": 0.029, "cpi": 0.024, "cpih": 0.021},
+        {"year": "2013/2014", "pay_award": 0.010, "rpi": 0.025, "cpi": 0.018, "cpih": 0.013},
+        {"year": "2014/2015", "pay_award": 0.000, "rpi": 0.009, "cpi": -0.001, "cpih": 0.007},
+        {"year": "2015/2016", "pay_award": 0.000, "rpi": 0.013, "cpi": 0.003, "cpih": 0.020},
+        {"year": "2016/2017", "pay_award": 0.010, "rpi": 0.035, "cpi": 0.027, "cpih": 0.019},
+        {"year": "2017/2018", "pay_award": 0.010, "rpi": 0.034, "cpi": 0.024, "cpih": 0.019},
+        {"year": "2018/2019", "pay_award": 0.020, "rpi": 0.030, "cpi": 0.021, "cpih": 0.021},
+        {"year": "2019/2020", "pay_award": 0.023, "rpi": 0.015, "cpi": 0.008, "cpih": 0.050},
+        {"year": "2020/2021", "pay_award": 0.030, "rpi": 0.029, "cpi": 0.015, "cpih": 0.001},
+        {"year": "2021/2022", "pay_award": 0.030, "rpi": 0.111, "cpi": 0.090, "cpih": 0.054},
+        {"year": "2022/2023", "pay_award": 0.030, "rpi": 0.114, "cpi": 0.087, "cpih": 0.069},
+        {"year": "2023/2024", "pay_award": None, "rpi": 0.033, "cpi": 0.023, "cpih": 0.040}, # Will use nodal-specific values
+        {"year": "2024/2025", "pay_award": None, "rpi": 0.045, "cpi": 0.035, "cpih": 0.040}, # Will use nodal-specific values
+        {"year": "2025/2026", "pay_award": None, "rpi": 0.045, "cpi": 0.035, "cpih": 0.040}
     ]
     
     # If a nodal point is specified, use nodal-specific pay awards for 2023/2024, 2024/2025, and 2025/2026
