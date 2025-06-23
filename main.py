@@ -353,8 +353,6 @@ def setup_sidebar():
     with col2:
         global_pay_rise = st.number_input("Global Pay Rise (%)", min_value=0.0, max_value=30.0, value=st.session_state.global_pay_rise, step=0.1, key="global_pay_rise", on_change=update_global_settings)
     
-    # Add toggle for including Year 0 in cost calculations
-    include_year_0 = st.sidebar.checkbox("Include Year 0 (2025/2026) in cost calculations", value=False, key="include_year_0")
     
     # Check for individual changes and display warning if necessary
     if check_individual_changes():
@@ -395,7 +393,7 @@ def setup_sidebar():
         st.sidebar.write(f":blue[{fpr_text}**Calculating...**]")
         st.sidebar.write(f":red[Pay Erosion (current): **Calculating...**]")
     
-    return inflation_type, fpr_start_year, fpr_end_year, num_years, st.session_state.fpr_targets, st.session_state.doctor_counts, year_inputs, additional_hours, out_of_hours, include_year_0
+    return inflation_type, fpr_start_year, fpr_end_year, num_years, st.session_state.fpr_targets, st.session_state.doctor_counts, year_inputs, additional_hours, out_of_hours
 
 def update_global_settings():
     for year in range(1, st.session_state.num_years + 1):
@@ -772,8 +770,11 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         "Yearly Pension Costs": yearly_pension_costs,
     }
 
-def display_cost_breakdown(results, year_inputs, additional_hours, out_of_hours, include_year_0=False):
+def display_cost_breakdown(results, year_inputs, additional_hours, out_of_hours):
     st.subheader("Cost Breakdown by Year")
+    
+    # Add toggle for including Year 0 in cost calculations
+    include_year_0 = st.checkbox("Include Year 0 (2025/2026) in cost calculations", value=False, key="include_year_0")
     
     num_years = len(year_inputs)
     
@@ -874,10 +875,10 @@ def display_cost_breakdown(results, year_inputs, additional_hours, out_of_hours,
                   delta=f"Total Tax Recouped: £{cumulative_tax_recouped:,.2f}")
     st.divider()
 
-def display_results(results, total_nominal_cost, total_real_cost, year_inputs, additional_hours, out_of_hours, include_year_0=False):
+def display_results(results, total_nominal_cost, total_real_cost, year_inputs, additional_hours, out_of_hours):
     # Display the detailed cost breakdown
     st.divider()
-    display_cost_breakdown(results, year_inputs, additional_hours, out_of_hours, include_year_0)
+    display_cost_breakdown(results, year_inputs, additional_hours, out_of_hours)
     
     st.write("All Calculation Summary Table")
     df_results = pd.DataFrame(results)
@@ -1099,7 +1100,7 @@ def main():
     st.write("This app is best used on a desktop/laptop. Adjust settings in the sidebar.")
     st.divider()
 
-    inflation_type, fpr_start_year, fpr_end_year, num_years, fpr_percentages, doctor_counts, year_inputs, additional_hours, out_of_hours, include_year_0 = setup_sidebar()
+    inflation_type, fpr_start_year, fpr_end_year, num_years, fpr_percentages, doctor_counts, year_inputs, additional_hours, out_of_hours = setup_sidebar()
 
     results, total_nominal_cost, total_real_cost, cumulative_costs = calculate_results(
         fpr_percentages, doctor_counts, year_inputs, inflation_type, additional_hours, out_of_hours
@@ -1107,7 +1108,7 @@ def main():
 
     display_fpr_achievement(results)
     display_visualizations(results, cumulative_costs, year_inputs, inflation_type, num_years)
-    display_results(results, total_nominal_cost, total_real_cost, year_inputs, additional_hours, out_of_hours, include_year_0)
+    display_results(results, total_nominal_cost, total_real_cost, year_inputs, additional_hours, out_of_hours)
 
 if __name__ == "__main__":
     main()
