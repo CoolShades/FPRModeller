@@ -349,9 +349,9 @@ def setup_sidebar():
     st.sidebar.subheader("Global Settings for Future Years")
     col1, col2 = st.sidebar.columns(2)
     with col1:
-        global_inflation = st.number_input("Global Inflation Rate (%)", min_value=0.0, max_value=30.0, value=st.session_state.global_inflation, step=0.1, key="global_inflation", on_change=update_global_settings)
+        global_inflation = st.number_input("Global Inflation Rate (%)", min_value=0.0, max_value=40.0, value=st.session_state.global_inflation, step=0.1, key="global_inflation", on_change=update_global_settings)
     with col2:
-        global_pay_rise = st.number_input("Global Pay Rise (%)", min_value=0.0, max_value=30.0, value=st.session_state.global_pay_rise, step=0.1, key="global_pay_rise", on_change=update_global_settings)
+        global_pay_rise = st.number_input("Global Pay Rise (%)", min_value=0.0, max_value=40.0, value=st.session_state.global_pay_rise, step=0.1, key="global_pay_rise", on_change=update_global_settings)
     
     
     # Check for individual changes and display warning if necessary
@@ -584,7 +584,7 @@ def setup_year_inputs_sidebar(num_years, inflation_type):
                         year_input["nodal_percentages"][name] = st.number_input(
                             f"{name} (%)",
                             min_value=0.0,
-                            max_value=30.0,
+                            max_value=40.0,
                             value=default_value,
                             step=0.1,
                             format="%.1f",
