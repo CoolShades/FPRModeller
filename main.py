@@ -642,13 +642,18 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
     yearly_pension_costs = []
 
     for year, year_input in enumerate(year_inputs):
+        # Get inflation rate for current year
+        inflation_rate = year_input["inflation"]
+        consolidated_increase = year_input["pound_increases"][name]
+        
         if year == 0:
             # Year 0 (2025/2026) calculations
-            consolidated_increase = year_input["pound_increases"][name]
-            
             # Use the input percentage as the total pay rise for 2025/26
             total_percentage_from_input = year_input["nodal_percentages"][name]
             consolidated_percentage = consolidated_increase / base_pay
+            
+            # Define percentage_increase for Year 0 to use in pay freeze detection
+            percentage_increase = total_percentage_from_input
             
             total_pay_rise = total_percentage_from_input + consolidated_percentage
             new_nominal_pay = base_pay * (1 + total_pay_rise)
@@ -669,7 +674,6 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
             
         else:
             # Subsequent years (2026/2027 onwards)
-            consolidated_increase = year_input["pound_increases"][name]
             percentage_increase = year_input["nodal_percentages"][name] + year_input["inflation"]
             total_pay_rise = percentage_increase + (consolidated_increase / pay_progression_nominal[-1])
             new_nominal_pay = pay_progression_nominal[-1] * (1 + percentage_increase) + consolidated_increase
@@ -699,47 +703,42 @@ def calculate_nodal_point_results(name, base_pay, post_ddrb_pay, fpr_percentage,
         yearly_pension_costs.append(pension_cost)
 
         # Calculate pay progression and FPR metrics
-        inflation_rate = year_input["inflation"]
         new_real_pay = new_nominal_pay / (1 + inflation_rate)
         
         # Calculate pay erosion directly based on FPR achievement
         fpr_target_decimal = fpr_percentage / 100
-        total_nominal_rise_given = (new_nominal_pay / base_pay) - 1
         
-        # Calculate what nominal rise is needed to achieve FPR with current inflation
-        adjusted_fpr_target = (1 + fpr_target_decimal) * (1 + inflation_rate) - 1
+        # Check if this is a pay freeze year (where pay rise matches inflation)
+        is_pay_freeze = abs(percentage_increase - inflation_rate) < 0.0001 and consolidated_increase == 0
         
-        # Calculate current pay erosion based on how much we've achieved vs what's needed
-        if adjusted_fpr_target > 0:
-            # Calculate the real-terms effect of what we gave vs what was needed
+        # For Year 0 or non-pay-freeze years, calculate normally
+        if year == 0 or not is_pay_freeze:
+            total_nominal_rise_given = (new_nominal_pay / base_pay) - 1
+            
+            # Calculate what nominal rise is needed to achieve FPR with current inflation
+            adjusted_fpr_target = (1 + fpr_target_decimal) * (1 + inflation_rate) - 1
+            
+            # Calculate real-terms effect
             real_terms_achieved = (1 + total_nominal_rise_given) / (1 + inflation_rate) - 1
             real_terms_needed = fpr_target_decimal
             
             # Pay erosion/gain = difference between what was achieved and what was needed
             current_pay_cut = real_terms_needed - real_terms_achieved
+            
+            # Calculate FPR progress
+            if adjusted_fpr_target > 0:
+                current_progress = (total_nominal_rise_given / adjusted_fpr_target) * 100
+            else:
+                current_progress = 100  # If no FPR target needed, we're at 100%
         else:
-            current_pay_cut = 0
+            # For pay freeze years, maintain the same pay erosion and FPR progress values
+            # as the previous year
+            current_pay_cut = real_terms_pay_cuts[-1]
+            current_progress = fpr_progress[-1]
         
         pay_progression_nominal.append(new_nominal_pay)
         pay_progression_real.append(new_real_pay)
         real_terms_pay_cuts.append(current_pay_cut)
-        
-        # Calculate FPR progress correctly accounting for current year inflation
-        # FPR progress should measure real-terms restoration, not just nominal pay rise
-        fpr_target_decimal = fpr_percentage / 100  # Target nominal pay rise needed for FPR (calculated without current year inflation)
-        total_nominal_rise_given = (new_nominal_pay / base_pay) - 1  # Total nominal pay rise from 2024/25 baseline
-        
-        # Adjust FPR target for current year inflation
-        # If inflation is higher, we need a higher nominal rise to achieve the same real restoration
-        adjusted_fpr_target = (1 + fpr_target_decimal) * (1 + inflation_rate) - 1
-        
-        # Calculate progress as percentage of adjusted target achieved
-        if adjusted_fpr_target > 0:
-            current_progress = (total_nominal_rise_given / adjusted_fpr_target) * 100
-        else:
-            current_progress = 100  # If no FPR target needed, we're at 100%
-        
-        # Don't cap progress - it can exceed 100% if more than FPR is achieved
         fpr_progress.append(current_progress)
         
         net_change_in_pay.append(total_pay_rise * 100)
